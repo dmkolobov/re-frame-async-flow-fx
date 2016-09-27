@@ -4,16 +4,28 @@
     [clojure.set :as set]
     [day8.re-frame.forward-events-fx]))
 
+(defn conj-event
+	[trie event-v]
+	(assoc-in trie event-v true))
+
+(defn seen?
+	"Given an event trie and an event vector, return true if
+	the event vector is in the event trie."
+	[trie event-v]
+	(if (seq event-v)
+		(let [[x & r] event-v]
+			(if-let [t (get trie x)]
+				(recur t r)
+				false))
+		true))
 
 (defn seen-all-of?
-  [required-events seen-events]
-  (empty? (set/difference required-events seen-events)))
-
+  [required-patterns seen-events]
+	(every? (partial seen? seen-events) required-patterns))
 
 (defn seen-any-of?
-  [required-events seen-events]
-  (some? (seq (set/intersection seen-events required-events))))
-
+  [required-patterns seen-events]
+	(some? (some (partial seen? seen-events) required-patterns)))
 
 (defn startable-rules
   "Given the accumulated set of seen events and the set of rules already started,
@@ -34,6 +46,16 @@
 		when-fn
 		(re-frame/console :error  "async-flow: got bad value for :when - " when-kw)))
 
+(defn massage-patterns
+	[event events]
+	(if event
+		(if (keyword? event)
+			[[event]]
+			[event])
+		(mapv (fn [pattern]
+					  (if (keyword? pattern) [pattern] pattern))
+				  events)))
+
 (defn massage-rules
   "Massage the supplied rules as follows:
     - replace `:when` keyword value with a function implementing the predicate
@@ -41,11 +63,11 @@
     - add a unique :id, if one not already present"
   [rules]
 	(->> rules
-			 (map-indexed (fn [index {:as rule :keys [id when events dispatch dispatch-n halt?]}]
+			 (map-indexed (fn [index {:as rule :keys [id when event events dispatch dispatch-n halt?]}]
 											{:id         (or id index)
 											 :halt?      (or halt? false)
 											 :when       (when->fn when)
-											 :events     (if (coll? events) (set events) (hash-set events))
+											 :events     (massage-patterns event events)
 											 :dispatch-n (cond
 																		 dispatch-n (if dispatch
 																									(re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
@@ -55,6 +77,8 @@
 
 
 ;; -- Event Handler
+
+(def rule-event-ids (comp (map :events) (map first)))
 
 (defn make-flow-event-handler
   "Given a flow definitiion, returns an event handler which implements this definition"
@@ -95,10 +119,14 @@
         ;;   1. Establish initial state - :seen-events and ::rules-fired are made empty sets
         ;;   2. dispatch the first event, to kick start flow
         ;;   3. arrange for the events to be forwarded to this handler
-        :setup {:db             (set-state db #{} #{})
+        :setup {:db             (set-state db {} #{})
                 :dispatch       first-dispatch
                 :forward-events {:register    id
-                                 :events      (apply set/union (map :events rules))
+                                 :events      (->> rules
+																									 (map :events)
+																									 (map first)
+																									 (map first)
+																									 (set))
                                  :dispatch-to [id]}}
 
         ;; Teardown this flow coordinator:
@@ -113,19 +141,19 @@
         ;; A new event has been forwarded, so work out what should happen:
         ;;  1. does this new event mean we should dispatch another?
         ;;  2. remember this event has happened
-        (let [[_ [forwarded-event-id & args]] event-v
-              {:keys [seen-events rules-fired]} (get-state db)
-              new-seen-events (conj seen-events forwarded-event-id)
-              ready-rules     (startable-rules rules new-seen-events rules-fired)
-							add-halt?       (some :halt? ready-rules)
-              ready-rules-ids (->> ready-rules (map :id) set)
-              new-rules-fired (set/union rules-fired ready-rules-ids)
-							new-dispatches  (cond-> (mapcat :dispatch-n ready-rules)
-																			add-halt? vec
-																			add-halt? (conj [id :halt-flow]))]
-          (merge
-            {:db       (set-state db new-seen-events new-rules-fired)}
-            (when (seq new-dispatches) {:dispatch-n new-dispatches})))))))
+        (let [{:keys [seen-events rules-fired]} (get-state db)
+              new-seen-events (conj-event seen-events (second event-v))
+              ready-rules     (startable-rules rules new-seen-events rules-fired)]
+					(if (seq ready-rules)
+						(let [add-halt?       (some :halt? ready-rules)
+									ready-rules-ids (->> ready-rules (map :id) set)
+									new-rules-fired (set/union rules-fired ready-rules-ids)
+									new-dispatches  (cond-> (mapcat :dispatch-n ready-rules)
+																					add-halt? vec
+																					add-halt? (conj [id :halt-flow]))]
+							(merge {:db (set-state db new-seen-events new-rules-fired)}
+										 (when (seq new-dispatches) {:dispatch-n new-dispatches})))
+						{:db db}))))))
 
 
 (defn- ensure-has-id
