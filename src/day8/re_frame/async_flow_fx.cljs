@@ -46,15 +46,16 @@
 		when-fn
 		(re-frame/console :error  "async-flow: got bad value for :when - " when-kw)))
 
-(defn massage-patterns
-	[event events]
-	(if event
-		(if (keyword? event)
-			[[event]]
-			[event])
-		(mapv (fn [pattern]
-					  (if (keyword? pattern) [pattern] pattern))
-				  events)))
+(defn normalize-events
+	[{:keys [event events] :as rule}]
+	(assoc rule
+		:events (if event
+							(if (keyword? event)
+								[[event]]
+								[event])
+							(mapv (fn [pattern]
+											(if (keyword? pattern) [pattern] pattern))
+										events))))
 
 (defn create-dispatch
 	[dispatch dispatch-n rule]
@@ -92,7 +93,7 @@
 	{:id         (or id index)
 	 :halt?      (or halt? false)
 	 :when       (when->fn when)
-	 :events     (massage-patterns event events)
+	 :events     events
 	 :dispatch-n (create-dispatch dispatch dispatch-n rule)})
 
 (defn massage-rules
@@ -103,7 +104,7 @@
 							"foobar"
 							(conj rules (massage-rule (count rules) rule))))
 					[]
-					rules))
+					(map normalize-events rules)))
 
 ;; -- Event Handler
 
