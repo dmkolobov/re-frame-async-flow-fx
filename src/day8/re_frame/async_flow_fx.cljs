@@ -56,6 +56,15 @@
 					  (if (keyword? pattern) [pattern] pattern))
 				  events)))
 
+(defn create-dispatch
+	[dispatch dispatch-n]
+	(cond
+		dispatch-n (if dispatch
+								 (re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
+								 dispatch-n)
+		dispatch   (list dispatch)
+		:else      '()))
+
 (defn massage-rules
   "Massage the supplied rules as follows:
     - replace `:when` keyword value with a function implementing the predicate
@@ -68,13 +77,25 @@
 											 :halt?      (or halt? false)
 											 :when       (when->fn when)
 											 :events     (massage-patterns event events)
-											 :dispatch-n (cond
-																		 dispatch-n (if dispatch
-																									(re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
-																									dispatch-n)
-																		 dispatch   (list dispatch)
-																		 :else      '())}))))
+											 :dispatch-n (create-dispatch dispatch dispatch-n)}))))
 
+(defn expand-sequence-rule
+	[{:keys [events step-success dispatch dispatch-n halt?]}]
+	(loop [rules  []
+				 prev   (first events)
+				 events (rest events)]
+		(if (seq events)
+			(recur (conj rules
+									 {:when     :seen?
+										:event    (conj step-success prev)
+										:dispatch (first events)})
+						 (first events)
+						 (rest events))
+			(conj rules
+						{:when       :seen?
+						 :event      (conj step-success prev)
+						 :dispatch-n (create-dispatch dispatch dispatch-n)
+						 :halt?      halt?}))))
 
 ;; -- Event Handler
 
@@ -123,8 +144,7 @@
                 :dispatch       first-dispatch
                 :forward-events {:register    id
                                  :events      (->> rules
-																									 (map :events)
-																									 (map first)
+																									 (mapcat :events)
 																									 (map first)
 																									 (set))
                                  :dispatch-to [id]}}
@@ -143,17 +163,15 @@
         ;;  2. remember this event has happened
         (let [{:keys [seen-events rules-fired]} (get-state db)
               new-seen-events (conj-event seen-events (second event-v))
-              ready-rules     (startable-rules rules new-seen-events rules-fired)]
-					(if (seq ready-rules)
-						(let [add-halt?       (some :halt? ready-rules)
-									ready-rules-ids (->> ready-rules (map :id) set)
-									new-rules-fired (set/union rules-fired ready-rules-ids)
-									new-dispatches  (cond-> (mapcat :dispatch-n ready-rules)
-																					add-halt? vec
-																					add-halt? (conj [id :halt-flow]))]
+              ready-rules     (startable-rules rules new-seen-events rules-fired)
+						  add-halt?       (some :halt? ready-rules)
+							ready-rules-ids (->> ready-rules (map :id) set)
+							new-rules-fired (set/union rules-fired ready-rules-ids)
+							new-dispatches  (cond-> (mapcat :dispatch-n ready-rules)
+																			add-halt? vec
+																			add-halt? (conj [id :halt-flow]))]
 							(merge {:db (set-state db new-seen-events new-rules-fired)}
-										 (when (seq new-dispatches) {:dispatch-n new-dispatches})))
-						{:db db}))))))
+										 (when (seq new-dispatches) {:dispatch-n new-dispatches})))))))
 
 
 (defn- ensure-has-id

@@ -66,15 +66,16 @@
               :db-path        [:p]
               :rules [{:id 0 :when :seen? :event :1 :dispatch [:2]}
                       {:id 1 :when :seen? :event [:foo :bar] :halt? true}
+											{:id :hello :when :seen? :events [[:1] [:foo :bar]] :dispatch [:world]}
                       {:id 2 :when :seen-any-of? :events [:4 :5] :dispatch [:6]}]}
         handler-fn  (core/make-flow-event-handler flow)]
 
-    ;; event :no should cause nothing to happen
+    ;; event :no should cause nothing to happen, but should be remembered.
     (is (= (handler-fn
              {:db {:p {:seen-events {:33 true}
                        :rules-fired #{}}}}
              [:test-id [:no]])
-           {:db {:p {:seen-events {:33 true}
+           {:db {:p {:seen-events {:33 true :no true}
                      :rules-fired #{}}}}))
 
     ;; new event should not cause a new dispatch because task is already started  (:id 0 is in :rules-fired)
@@ -97,8 +98,8 @@
              {:db {:p {:seen-events {:1 true}
                        :rules-fired #{0}}}}
              [:test-id [:foo :bar]])
-           {:db {:p {:seen-events {:1 true :foo {:bar true}} :rules-fired #{0 1}}}
-            :dispatch-n (list [:test-id :halt-flow])}))
+           {:db {:p {:seen-events {:1 true :foo {:bar true}} :rules-fired #{0 1 :hello}}}
+            :dispatch-n (list [:world] [:test-id :halt-flow])}))
 
     ;; make sure :seen-any-of? works
     (is (= (handler-fn
@@ -107,6 +108,38 @@
              [:test-id [:4]])
            {:db {:p {:seen-events {:4 true} :rules-fired #{2}}}
             :dispatch-n (list [:6])}))))
+
+(deftest test-event-filtering
+	(let [test-events [[:a 1] [:a 2] [:a 3]]
+				flow {:first-dispatch [:start]
+							:id             :test-id
+							:db-path        [:p]
+							:rules [{:id         :map
+											 :when       :seen?
+											 :event      [:start]
+											 :dispatch-n test-events}
+											{:id       :collect
+											 :when     :seen?
+											 :events   test-events
+											 :dispatch [:foobar]}]}
+				handler-fn  (core/make-flow-event-handler flow)]
+
+		;; test that all test events are fired when start happens
+		(is (= (handler-fn
+						 {:db {:p {:seen-events {}
+											 :rules-fired #{}}}}
+						 [:test-id [:start]])
+					 {:db {:p {:seen-events {:start true}
+										 :rules-fired #{:map}}}
+						:dispatch-n test-events}))
+
+		;; test the first test event is added to the seen events
+		(is (= (handler-fn
+						 {:db {:p {:seen-events {:start true}
+											 :rules-fired #{:map}}}}
+						 [:test-id [:a 1]])
+					 {:db {:p {:seen-events {:start true :a {1 true}}
+										 :rules-fired #{:map}}}}))))
 
 
 (deftest test-halt1
@@ -118,6 +151,27 @@
            { ;; :db {}
             :deregister-event-handler :some-id
             :forward-events           {:unregister :some-id}}))))
+
+(deftest test-sequence
+	(is (= (core/expand-sequence-rule
+					 {:when         :seen-sequence?
+						:events       [[:a] [:b] [:c]]
+						:step-success [:async/success]
+						:dispatch-n   [[:foo] [:bar]]
+						:halt?        true})
+
+				 [{:when     :seen?
+					 :event    [:async/success [:a]]
+					 :dispatch [:b]}
+
+					{:when     :seen?
+					 :event    [:async/success [:b]]
+					 :dispatch [:c]}
+
+					{:when       :seen?
+					 :event      [:async/success [:c]]
+					 :dispatch-n [[:foo] [:bar]]
+					 :halt?      true}])))
 
 
 ;; Aggh. I don't have dissoc-in available to make this work.
