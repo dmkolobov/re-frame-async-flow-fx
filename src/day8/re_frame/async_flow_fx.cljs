@@ -57,7 +57,7 @@
 				  events)))
 
 (defn create-dispatch
-	[dispatch dispatch-n]
+	[dispatch dispatch-n rule]
 	(cond
 		dispatch-n (if dispatch
 								 (re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
@@ -65,22 +65,8 @@
 		dispatch   (list dispatch)
 		:else      '()))
 
-(defn massage-rules
-  "Massage the supplied rules as follows:
-    - replace `:when` keyword value with a function implementing the predicate
-    - ensure that only `:dispatch` or `:dispatch-n` is provided
-    - add a unique :id, if one not already present"
-  [rules]
-	(->> rules
-			 (map-indexed (fn [index {:as rule :keys [id when event events dispatch dispatch-n halt?]}]
-											{:id         (or id index)
-											 :halt?      (or halt? false)
-											 :when       (when->fn when)
-											 :events     (massage-patterns event events)
-											 :dispatch-n (create-dispatch dispatch dispatch-n)}))))
-
 (defn expand-sequence-rule
-	[{:keys [events step-success dispatch dispatch-n halt?]}]
+	[{:keys [events step-success dispatch dispatch-n halt?] :as rule}]
 	(loop [rules  []
 				 prev   (first events)
 				 events (rest events)]
@@ -94,8 +80,30 @@
 			(conj rules
 						{:when       :seen?
 						 :event      (conj step-success prev)
-						 :dispatch-n (create-dispatch dispatch dispatch-n)
+						 :dispatch-n (create-dispatch dispatch dispatch-n rule)
 						 :halt?      halt?}))))
+
+(defn massage-rule
+  "Massage the supplied rules as follows:
+    - replace `:when` keyword value with a function implementing the predicate
+    - ensure that only `:dispatch` or `:dispatch-n` is provided
+    - add a unique :id, if one not already present"
+  [index {:as rule :keys [id when event events dispatch dispatch-n halt?]}]
+	{:id         (or id index)
+	 :halt?      (or halt? false)
+	 :when       (when->fn when)
+	 :events     (massage-patterns event events)
+	 :dispatch-n (create-dispatch dispatch dispatch-n rule)})
+
+(defn massage-rules
+	""
+	[rules]
+	(reduce (fn [rules rule]
+						(if (= (:when rule) :seen-sequence?)
+							"foobar"
+							(conj rules (massage-rule (count rules) rule))))
+					[]
+					rules))
 
 ;; -- Event Handler
 
