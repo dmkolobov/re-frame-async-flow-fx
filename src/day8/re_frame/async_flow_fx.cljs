@@ -101,7 +101,10 @@
 	[rules]
 	(reduce (fn [rules rule]
 						(if (= (:when rule) :seen-sequence?)
-							"foobar"
+							(->> (expand-sequence-rule rule)
+									 (map-indexed (fn [index expanded-rule]
+																	(massage-rule (+ index (count rules))
+																								expanded-rule))))
 							(conj rules (massage-rule (count rules) rule))))
 					[]
 					(map normalize-events rules)))

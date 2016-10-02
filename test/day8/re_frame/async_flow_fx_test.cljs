@@ -34,6 +34,28 @@
   (is (= (core/startable-rules rules {:a true} #{})
          [(nth rules 1)]))))
 
+(def test-sequence-rule
+	{:when         :seen-sequence?
+	 :events       [[:a] [:b] [:c]]
+	 :step-success [:async/success]
+	 :dispatch-n   [[:foo] [:bar]]
+	 :halt?        true})
+
+(deftest test-sequence
+	(is (= (core/expand-sequence-rule test-sequence-rule)
+
+				 [{:when     :seen?
+					 :event    [:async/success [:a]]
+					 :dispatch [:b]}
+
+					{:when     :seen?
+					 :event    [:async/success [:b]]
+					 :dispatch [:c]}
+
+					{:when       :seen?
+					 :event      [:async/success [:c]]
+					 :dispatch-n [[:foo] [:bar]]
+					 :halt?      true}])))
 
 (deftest test-massage-rules
   (is (= (core/massage-rules [{:when :seen? :event :1 :dispatch [:2]}])
@@ -43,7 +65,36 @@
          (list {:id 0 :when core/seen-all-of? :events [[:1] [:2]] :halt? true :dispatch-n '()})))
 
   (is (= (core/massage-rules [{:when :seen-any-of? :events [:1 :2] :dispatch [:2] :halt? true}])
-         (list {:id 0 :when core/seen-any-of? :events [[:1] [:2]] :halt? true :dispatch-n (list [:2])}))))
+         (list {:id 0 :when core/seen-any-of? :events [[:1] [:2]] :halt? true :dispatch-n (list [:2])})))
+
+	(is (= (core/massage-rules [{:when :seen? :event :foo :dispatch [:bar]}
+															test-sequence-rule
+															{:when :seen? :event :hello :dispatch [:world]}]))
+			(list {:id 0
+						 :when       core/seen-any-of?
+						 :events     [[:foo]]
+						 :dispatch-n [[:bar]]
+						 :halt?      false}
+						{:id 1
+						 :when       core/seen-any-of?
+						 :events     [[:async/success :a]]
+						 :dispatch-n [[:b]]
+						 :halt?      false}
+						{:id 2
+						 :when       core/seen-any-of?
+						 :events     [[:async/success :b]]
+						 :dispatch-n [[:c]]
+						 :halt?      false}
+						{:id 3
+						 :when       core/seen-any-of?
+						 :events     [[:async/success :c]]
+						 :dispatch-n [[:foo] [:bar]]
+						 :halt?      true}
+						{:id 4
+						 :when       core/seen-any-of?
+						 :events     [[:hello]]
+						 :dispatch-n [[:world]]
+						 :halt?      false})))
 
 
 (deftest test-setup
@@ -151,28 +202,6 @@
            { ;; :db {}
             :deregister-event-handler :some-id
             :forward-events           {:unregister :some-id}}))))
-
-(deftest test-sequence
-	(is (= (core/expand-sequence-rule
-					 {:when         :seen-sequence?
-						:events       [[:a] [:b] [:c]]
-						:step-success [:async/success]
-						:dispatch-n   [[:foo] [:bar]]
-						:halt?        true})
-
-				 [{:when     :seen?
-					 :event    [:async/success [:a]]
-					 :dispatch [:b]}
-
-					{:when     :seen?
-					 :event    [:async/success [:b]]
-					 :dispatch [:c]}
-
-					{:when       :seen?
-					 :event      [:async/success [:c]]
-					 :dispatch-n [[:foo] [:bar]]
-					 :halt?      true}])))
-
 
 ;; Aggh. I don't have dissoc-in available to make this work.
 #_(deftest test-halt2
