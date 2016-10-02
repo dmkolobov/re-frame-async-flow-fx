@@ -34,28 +34,37 @@
   (is (= (core/startable-rules rules {:a true} #{})
          [(nth rules 1)]))))
 
-(def test-sequence-rule
-	{:when         :seen-sequence?
-	 :events       [[:a] [:b] [:c]]
-	 :step-success [:async/success]
-	 :dispatch-n   [[:foo] [:bar]]
-	 :halt?        true})
+
 
 (deftest test-sequence
-	(is (= (core/expand-sequence-rule test-sequence-rule)
+	(is (= (core/expand-sequence-rule
+					 {:when         :seen-sequence?
+						:events       [[:a] [:b] [:c]]
+						:step-success [:async/success]
+						:dispatch-n   [[:foo] [:bar]]
+						:halt?        true})
 
 				 [{:when     :seen?
-					 :event    [:async/success [:a]]
+					 :events   [[:async/success [:a]]]
 					 :dispatch [:b]}
 
 					{:when     :seen?
-					 :event    [:async/success [:b]]
+					 :events   [[:async/success [:b]]]
 					 :dispatch [:c]}
 
 					{:when       :seen?
-					 :event      [:async/success [:c]]
+					 :events     [[:async/success [:c]]]
 					 :dispatch-n [[:foo] [:bar]]
-					 :halt?      true}])))
+					 :halt?      true}]))
+
+	(is (= (core/expand-sequence-rule
+					 {:when         :seen-sequence?
+						:events       [[:a] [:b]]
+						:step-success [:async/success]
+						:dispatch-n   [[:foobar]]
+						:halt?        true})
+				 (list {:when :seen? :events [[:async/success [:a]]] :dispatch [:b]}
+							 {:when :seen? :events [[:async/success [:b]]] :dispatch-n [[:foobar]] :halt? true}))))
 
 (deftest test-massage-rules
   (is (= (core/massage-rules [{:when :seen? :event :1 :dispatch [:2]}])
@@ -67,8 +76,27 @@
   (is (= (core/massage-rules [{:when :seen-any-of? :events [:1 :2] :dispatch [:2] :halt? true}])
          (list {:id 0 :when core/seen-any-of? :events [[:1] [:2]] :halt? true :dispatch-n (list [:2])})))
 
+	(is (= (map #(dissoc % :when)
+							(core/massage-rules [{:when         :seen-sequence?
+																	  :events       [[:cause] [:effect]]
+																	  :step-success [:success]
+																	  :dispatch-n   [[:foobar]]
+																	  :halt? true}]))
+				 (list {:id 0
+								:events     [[:success [:cause]]]
+								:dispatch-n [[:effect]]
+								:halt?      false}
+							 {:id 1
+								:events     [[:success [:effect]]]
+								:dispatch-n [[:foobar]]
+								:halt?      true})))
+
 	(is (= (core/massage-rules [{:when :seen? :event :foo :dispatch [:bar]}
-															test-sequence-rule
+															{:when         :seen-sequence?
+															 :events       [[:a] [:b] [:c]]
+															 :step-success [:async/success]
+															 :dispatch     [:foobar]
+															 :halt?        true}
 															{:when :seen? :event :hello :dispatch [:world]}]))
 			(list {:id 0
 						 :when       core/seen-any-of?
@@ -88,7 +116,7 @@
 						{:id 3
 						 :when       core/seen-any-of?
 						 :events     [[:async/success :c]]
-						 :dispatch-n [[:foo] [:bar]]
+						 :dispatch-n [[:foobar]]
 						 :halt?      true}
 						{:id 4
 						 :when       core/seen-any-of?

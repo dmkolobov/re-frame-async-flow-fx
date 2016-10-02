@@ -2,6 +2,7 @@
   (:require
     [re-frame.core :as re-frame]
     [clojure.set :as set]
+		[cljs.pprint]
     [day8.re-frame.forward-events-fx]))
 
 (defn conj-event
@@ -74,13 +75,13 @@
 		(if (seq events)
 			(recur (conj rules
 									 {:when     :seen?
-										:event    (conj step-success prev)
+										:events   (list (conj step-success prev))
 										:dispatch (first events)})
 						 (first events)
 						 (rest events))
 			(conj rules
 						{:when       :seen?
-						 :event      (conj step-success prev)
+						 :events     (list (conj step-success prev))
 						 :dispatch-n (create-dispatch dispatch dispatch-n rule)
 						 :halt?      halt?}))))
 
