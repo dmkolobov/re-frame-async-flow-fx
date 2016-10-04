@@ -7,38 +7,36 @@
 (defrecord FlowState
 	[flows rules matcher seen-events fired-rules])
 
-(defn matching-rules
-	"Given a machine state and an event vector, return the IDs of
-	all rules which mention this event in their rules."
-	[{:keys [matcher]} event-v]
-	(matcher/matching-rules matcher event-v))
+(def fresh-state
+	(FlowState. {} {} {} {} #{}))
 
-(defn record-event
-	"Given a machine state, a list of rule IDs, and an event vector,
-	return a new machine state with that event being seen by all the
-	provided rules."
-	[flow-state event-v rule-ids]
-	(update flow-state
-					:seen-events
-					(fn [seen]
-						(reduce (fn [seen id]
-											(event-cache/record-event seen id event-v))
-										seen
-										rule-ids))))
-
-(defn filter-ready
-	"Given a machine state and a seq of rule-ids, return a seq of rules
-	from these IDs which are ready to be fired."
-	[{:keys [rules seen-events]} rule-ids]
-	(filter (fn [rule] ((:when rule) seen-events rule))
-					(map #(get rules %) rule-ids)))
+(defn add-rules
+	[{:keys [matcher seen-events rules flows] :as flow-state} new-rules]
+	(assoc flow-state
+		:rules        (reduce #(assoc %1 (:id %2) %2) rules new-rules)
+		:matcher      (reduce matcher/add-rule matcher new-rules)
+		:seen-events  (reduce event-cache/add-rule seen-events new-rules)
+		:flows        (reduce #(update %1 (keyword (namespace %2)) conj %2) flows (map :id new-rules))))
 
 (defn rule-actions
 	"Given a rule, return the events this rule should dispatch when ready."
-	[{:keys [flow-id halt? dispatch-n]}]
-	(if-let [halt-event (when halt? [:async/flow-halt flow-id])]
+	[{:keys [id halt? dispatch-n]}]
+	(if-let [halt-event (when halt? [:async-flow/halt (keyword (namespace id))])]
 		(conj dispatch-n halt-event)
 		dispatch-n))
+
+(defn record-event
+	"Given a machine state and an event vector, return a tuple [machine-state dispatches],
+	where machine-state is the state of the machine after seeing the event, and dispatches
+	are the events that should be dispatched after seeing the event."
+	[{:keys [seen-events matcher fired-rules rules] :as flow-state} event-v]
+	(let [match-ids   (matcher/matching-rules matcher event-v)
+				seen-events (reduce #(event-cache/record-event %1 %2 event-v) seen-events match-ids)
+				ready-rules (filter #((:when %) seen-events) (map #(get rules %) match-ids))]
+		[(assoc flow-state
+			 :seen-events seen-events
+			 :fired-rules (into fired-rules (map :id ready-rules)))
+		 (mapcat rule-actions ready-rules)]))
 
 ;; ---- events handlers ----
 
@@ -46,19 +44,9 @@
 	:async-flow/initialize
 	;;[flow-interceptor trim-v]
 	(fn [{:keys [flow-state]} {:keys [id first-dispatch rules] :as flow}]
-		(let [new-rules [] ;; (massage-rules id rules)
-					{:keys [matcher seen-events rules flows]} flow-state]
-
-			{:flow-state     (assoc flow-state
-												 :rules        (reduce #(assoc %1 (:id %2) %2)
-																			  			 rules
-																			  			 new-rules)
-												 :matcher      (reduce matcher/add-rule matcher new-rules)
-												 :seen-events  (reduce event-cache/add-rule seen-events new-rules)
-												 :flows        (assoc flows id (map :id new-rules)))
-
+		(let [new-rules []]
+			{:flow-state     (add-rules flow-state new-rules)
 			 :dispatch       first-dispatch
-
 			 :forward-events {:id          id
 												:events      (->> new-rules (mapcat :events) (map first))
 												:dispatch-to :async-flow/step}})))
@@ -67,15 +55,9 @@
 	:async-flow/step
 	;;[flow-interceptor trim-v]
 	(fn [{:keys [flow-state]} [event-v]]
-		(let [rule-ids    (matching-rules flow-state event-v)
-					flow-state  (record-event flow-state event-v rule-ids)
-					ready-rules (filter-ready flow-state rule-ids)
-					dispatches  (mapcat rule-actions ready-rules)]
+		(let [[flow-state dispatches] (record-event flow-state event-v)]
 			{:dispatch-n dispatches
-			 :flow-state (update flow-state
-													 :fired-rules
-													 into
-													 (map :id ready-rules))})))
+			 :flow-state flow-state})))
 
 (re-frame/reg-event-fx
 	:async-flow/halt

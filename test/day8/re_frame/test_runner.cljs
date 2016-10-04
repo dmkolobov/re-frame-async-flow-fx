@@ -5,7 +5,8 @@
     ;; Test Namespaces -------------------------------
     [day8.re-frame.async-flow-fx.async-flow-fx-test]
 		[day8.re-frame.async-flow-fx.matcher-test]
-		[day8.re-frame.async-flow-fx.event-cache-test])
+		[day8.re-frame.async-flow-fx.event-cache-test]
+		[day8.re-frame.async-flow-fx.machine-test])
   (:refer-clojure :exclude (set-print-fn!)))
 
 (enable-console-print!)
@@ -19,7 +20,8 @@
   (cljs-test/run-tests
     'day8.re-frame.async-flow-fx.async-flow-fx-test
 		'day8.re-frame.async-flow-fx.matcher-test
-		'day8.re-frame.async-flow-fx.event-cache-test))
+		'day8.re-frame.async-flow-fx.event-cache-test
+		'day8.re-frame.async-flow-fx.machine-test))
 
 ;; ---- KARMA  -----------------------------------------------------------------
 
