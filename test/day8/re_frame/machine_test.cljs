@@ -71,10 +71,25 @@
 													 :flow-1/rule-2 #{}
 													 :flow-1/rule-3 (:events rule-3)}
 						:fired-rules #{:flow-1/rule-1 :flow-1/rule-2})
-					(list [:success [:foobar]] [:async-flow/halt :flow-1])])))
+					(list [:success [:foobar]] [:async-flow/halt :flow-1])]))
 
+	(is (= (play m-state [:error [:foo]])
+				 [(assoc m-state
+						:seen-events  {:flow-1/rule-1 (:events rule-1)
+													 :flow-1/rule-2 (:events rule-2)
+													 :flow-1/rule-3 (disj (:events rule-3) [:error [:foo]])}
+						:fired-rules #{:flow-1/rule-3})
+					(list [:error [:foobar]] [:async-flow/halt :flow-1])]))
 
-(deftest test-rule-actions
+	(is (= (play m-state [:error [:bar]])
+				 [(assoc m-state
+						:seen-events  {:flow-1/rule-1 (:events rule-1)
+													 :flow-1/rule-2 (:events rule-2)
+													 :flow-1/rule-3 (disj (:events rule-3) [:error [:bar]])}
+						:fired-rules #{:flow-1/rule-3})
+					(list [:error [:foobar]] [:async-flow/halt :flow-1])])))
+
+	(deftest test-rule-actions
 	(is (= (m/rule-actions rule-1) (:dispatch-n rule-1)))
 	(is (= (m/rule-actions rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
 	(is (= (m/rule-actions rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))

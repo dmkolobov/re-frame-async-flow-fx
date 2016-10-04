@@ -32,7 +32,7 @@
 	[{:keys [seen-events matcher fired-rules rules] :as flow-state} event-v]
 	(let [match-ids   (matcher/matching-rules matcher event-v)
 				seen-events (reduce #(event-cache/record-event %1 %2 event-v) seen-events match-ids)
-				ready-rules (filter #((:when %) seen-events) (map #(get rules %) match-ids))]
+				ready-rules (filter #((:when %) seen-events %) (map #(get rules %) match-ids))]
 		[(assoc flow-state
 			 :seen-events seen-events
 			 :fired-rules (into fired-rules (map :id ready-rules)))
