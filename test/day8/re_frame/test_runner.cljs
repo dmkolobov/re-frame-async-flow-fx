@@ -3,7 +3,8 @@
     [cljs.test :as cljs-test :include-macros true]
     [jx.reporter.karma :as karma :include-macros true]
     ;; Test Namespaces -------------------------------
-    [day8.re-frame.async-flow-fx.async-flow-fx-test])
+    [day8.re-frame.async-flow-fx.async-flow-fx-test]
+		[day8.re-frame.async-flow-fx.matcher-test])
   (:refer-clojure :exclude (set-print-fn!)))
 
 (enable-console-print!)
@@ -15,7 +16,8 @@
 
 (defn ^:export run-html-tests []
   (cljs-test/run-tests
-    'day8.re-frame.async-flow-fx.async-flow-fx-test))
+    'day8.re-frame.async-flow-fx.async-flow-fx-test
+		'day8.re-frame.async-flow-fx.matcher-test))
 
 ;; ---- KARMA  -----------------------------------------------------------------
 
