@@ -54,7 +54,8 @@
 				 test-rules))
 
 	(is (= (m/compile {:id :flow-1
-										 :rules [[[[:success [:foo]] [:bar]]]
+										 :rules [;;when [:success [:foo]] dispatch [:bar]
+										         [[[:success [:foo]] [:bar]]]
 
 														 {:id         :rule-2
 															:when       :seen?
@@ -91,6 +92,11 @@
 
 (deftest test-add-flow
 	(is (= (m/add-rules m/fresh-state test-rules) m-state)))
+
+(deftest test-remove-rules
+	(is (= (m/remove-rules (m/add-rules m/fresh-state test-rules)
+												 :flow-1)
+				 m/fresh-state)))
 
 (defn play
 	[machine-state & events]

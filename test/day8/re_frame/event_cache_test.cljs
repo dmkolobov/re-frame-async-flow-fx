@@ -8,11 +8,11 @@
 											 [:car]}})
 
 (deftest test-add-rule
-	(is (= (cache/add-rule {} rule-1)
+	(is (= (cache/add-rules {} [rule-1])
 				 {:rule-1 #{[:foo] [:bar] [:car]}})))
 
 (deftest test-remove-rule
-	(is (= (cache/remove-rule {:rule-1 #{[:foobar]}} :rule-1)
+	(is (= (cache/remove-rules {:rule-1 #{[:foobar]}} [:rule-1])
 				 {})))
 
 (deftest test-record-event
@@ -21,7 +21,7 @@
 														 [:foo 42])
 				 {:rule-1 #{[:bar]}})))
 
-(let [seen        (cache/add-rule {} rule-1)
+(let [seen        (cache/add-rules {} [rule-1])
 			with-events (fn [& events]
 										(reduce #(cache/record-event %1 :rule-1 %2)
 													  seen

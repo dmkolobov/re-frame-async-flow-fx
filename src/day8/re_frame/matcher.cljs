@@ -13,6 +13,10 @@
 					matcher
 					events))
 
+(defn add-rules
+	[matcher rules]
+	(reduce add-rule matcher rules))
+
 (defn- removable-path?
 	[matcher path]
 	(let [x (get-in matcher path)]
@@ -46,6 +50,10 @@
 								(remove-event matcher event-v))))
 					matcher
 					events))
+
+(defn remove-rules
+	[matcher rules]
+	(reduce remove-rule matcher rules))
 
 (defn matching-rules
 	[matcher event-v]
