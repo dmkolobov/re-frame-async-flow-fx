@@ -6,7 +6,8 @@
     [day8.re-frame.async-flow-fx.async-flow-fx-test]
 		[day8.re-frame.async-flow-fx.matcher-test]
 		[day8.re-frame.async-flow-fx.event-cache-test]
-		[day8.re-frame.async-flow-fx.machine-test])
+		[day8.re-frame.async-flow-fx.machine-test]
+		[day8.re-frame.async-flow-fx.rule-test])
   (:refer-clojure :exclude (set-print-fn!)))
 
 (enable-console-print!)
@@ -21,7 +22,8 @@
     'day8.re-frame.async-flow-fx.async-flow-fx-test
 		'day8.re-frame.async-flow-fx.matcher-test
 		'day8.re-frame.async-flow-fx.event-cache-test
-		'day8.re-frame.async-flow-fx.machine-test))
+		'day8.re-frame.async-flow-fx.machine-test
+		'day8.re-frame.async-flow-fx.rule-test))
 
 ;; ---- KARMA  -----------------------------------------------------------------
 

@@ -3,29 +3,72 @@
 						[day8.re-frame.machine :as m]
 						[cljs.pprint :refer [pprint]]
 						[clojure.data :refer [diff]]
-						[day8.re-frame.event-cache :as cache]))
+						[day8.re-frame.event-cache :as cache]
+						[day8.re-frame.rule :as rule]))
 
 (def rule-1
-	{:id         :flow-1/rule-1
-	 :when       cache/seen-all-of?
-	 :events     #{[:success [:foo]]}
-	 :dispatch-n [[:bar]]})
+	(rule/map->Rule
+		{:id         :flow-1/rule-1
+		 :when       cache/seen-all-of?
+		 :events     #{[:success [:foo]]}
+		 :dispatch-n [[:bar]]
+		 :halt?      false}))
 
 (def rule-2
-	{:id         :flow-1/rule-2
-	 :when       cache/seen-all-of?
-	 :events     #{[:success [:bar]]}
-	 :dispatch-n [[:success [:foobar]]]
-	 :halt?      true})
+	(rule/map->Rule
+		{:id         :flow-1/rule-2
+		 :when       cache/seen-all-of?
+		 :events     #{[:success [:bar]]}
+		 :dispatch-n [[:success [:foobar]]]
+		 :halt?      true}))
 
 (def rule-3
-	{:id         :flow-1/rule-3
-	 :when       cache/seen-some-of?
-	 :events     #{[:error [:foo]] [:error [:bar]]}
-	 :dispatch-n [[:error [:foobar]]]
-	 :halt?      true})
+	(rule/map->Rule
+		{:id         :flow-1/rule-3
+		 :when       cache/seen-some-of?
+		 :events     #{[:error [:foo]] [:error [:bar]]}
+		 :dispatch-n [[:error [:foobar]]]
+		 :halt?      true}))
 
 (def test-rules [rule-1 rule-2 rule-3])
+
+(deftest test-compile
+	(is (= (m/compile {:id :flow-1
+								 	   :rules [{:id       :rule-1
+															:when     :seen?
+															:event    [:success [:foo]]
+															:dispatch [:bar]}
+
+											 	  	 {:id       :rule-2
+															:when     :seen?
+															:event    [:success [:bar]]
+															:dispatch [:success [:foobar]]
+															:halt?    true}
+
+													   {:id       :rule-3
+															:when     :seen-any-of?
+															:events   [[:error [:foo]]
+																			   [:error [:bar]]]
+															:dispatch [:error [:foobar]]
+															:halt?    true}]})
+				 test-rules))
+
+	(is (= (m/compile {:id :flow-1
+										 :rules [[[[:success [:foo]] [:bar]]]
+
+														 {:id         :rule-2
+															:when       :seen?
+															:event      [:success [:bar]]
+															:dispatch-n [[:success [:foobar]]]
+															:halt?      true}
+
+														 {:id       :rule-3
+															:when     :seen-any-of?
+															:events   [[:error [:foo]]
+																				 [:error [:bar]]]
+															:dispatch [:error [:foobar]]
+															:halt?    true}]})
+				 test-rules)))
 
 (def m-state
 	(m/map->FlowState
@@ -52,7 +95,7 @@
 (defn play
 	[machine-state & events]
 	(reduce (fn [[state dispatches] event-v]
-						(m/record-event state event-v))
+						(m/transition state event-v))
 					[machine-state nil]
 					events))
 
@@ -89,7 +132,7 @@
 						:fired-rules #{:flow-1/rule-3})
 					(list [:error [:foobar]] [:async-flow/halt :flow-1])])))
 
-	(deftest test-rule-actions
-	(is (= (m/rule-actions rule-1) (:dispatch-n rule-1)))
-	(is (= (m/rule-actions rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
-	(is (= (m/rule-actions rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))
+	;(deftest test-rule-actions
+	;(is (= (m/rule-actions rule-1) (:dispatch-n rule-1)))
+	;(is (= (m/rule-actions rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
+	;(is (= (m/rule-actions rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))

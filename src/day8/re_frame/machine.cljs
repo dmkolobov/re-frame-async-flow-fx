@@ -2,7 +2,8 @@
 	(:require
 		[re-frame.core :as re-frame :refer [trim-v]]
 		[day8.re-frame.event-cache :as event-cache]
-		[day8.re-frame.matcher :as matcher]))
+		[day8.re-frame.matcher :as matcher]
+		[day8.re-frame.rule :as rule]))
 
 (defrecord FlowState
 	[flows rules matcher seen-events fired-rules])
@@ -18,14 +19,25 @@
 		:seen-events  (reduce event-cache/add-rule seen-events new-rules)
 		:flows        (reduce #(update %1 (keyword (namespace %2)) conj %2) flows (map :id new-rules))))
 
-(defn rule-actions
-	"Given a rule, return the events this rule should dispatch when ready."
-	[{:keys [id halt? dispatch-n]}]
-	(if-let [halt-event (when halt? [:async-flow/halt (keyword (namespace id))])]
-		(conj dispatch-n halt-event)
-		dispatch-n))
+(defn remove-rules
+	[{:keys [matcher seen-events rules flows] :as flow-state} flow-id]
+	(let [rule-ids   (get flows flow-id)
+				flow-rules (map #(get rules %) rule-ids)]
+		(assoc flow-state
+			:rules       (reduce dissoc rules rule-ids)
+			:matcher     (reduce matcher/remove-rule matcher flow-rules)
+			:seen-events (reduce dissoc seen-events rule-ids)
+			:flows       (dissoc flows flow-id))))
 
-(defn record-event
+(defn compile
+	"Given a machine specification, return a sequence of normalized rules
+	which can be added to an existing machine."
+	[{:keys [id rules]}]
+	(->> rules
+			 (mapcat #(if (map? %) [%] (rule/causality-seq->rules %)))
+			 (map-indexed #(rule/spec->rule id %1 %2))))
+
+(defn transition
 	"Given a machine state and an event vector, return a tuple [machine-state dispatches],
 	where machine-state is the state of the machine after seeing the event, and dispatches
 	are the events that should be dispatched after seeing the event."
@@ -36,32 +48,4 @@
 		[(assoc flow-state
 			 :seen-events seen-events
 			 :fired-rules (into fired-rules (map :id ready-rules)))
-		 (mapcat rule-actions ready-rules)]))
-
-;; ---- events handlers ----
-
-(re-frame/reg-event-fx
-	:async-flow/initialize
-	;;[flow-interceptor trim-v]
-	(fn [{:keys [flow-state]} {:keys [id first-dispatch rules] :as flow}]
-		(let [new-rules []]
-			{:flow-state     (add-rules flow-state new-rules)
-			 :dispatch       first-dispatch
-			 :forward-events {:id          id
-												:events      (->> new-rules (mapcat :events) (map first))
-												:dispatch-to :async-flow/step}})))
-
-(re-frame/reg-event-fx
-	:async-flow/step
-	;;[flow-interceptor trim-v]
-	(fn [{:keys [flow-state]} [event-v]]
-		(let [[flow-state dispatches] (record-event flow-state event-v)]
-			{:dispatch-n dispatches
-			 :flow-state flow-state})))
-
-(re-frame/reg-event-fx
-	:async-flow/halt
-	;;[flow-interceptor trim-v]
-	(fn [{:keys [flow-state]} flow-id]
-		(let [{:keys [matcher seen-events rules]} flow-state]
-			())))
+		 (mapcat rule/rule-effects ready-rules)]))
