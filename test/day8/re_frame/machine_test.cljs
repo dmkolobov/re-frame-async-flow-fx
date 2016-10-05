@@ -77,7 +77,7 @@
 								   :flow-1/rule-2 rule-2
 								   :flow-1/rule-3 rule-3}
 
-		 :flows       {:flow-1 (list :flow-1/rule-3 :flow-1/rule-2 :flow-1/rule-1)}
+		 :flows       {:flow-1 (list :flow-1/rule-1 :flow-1/rule-2 :flow-1/rule-3)}
 
 		 :matcher     {:success {[:foo] #{:flow-1/rule-1}
 														 [:bar] #{:flow-1/rule-2}}
@@ -91,10 +91,10 @@
 		 :fired-rules #{}}))
 
 (deftest test-add-flow
-	(is (= (m/add-rules m/fresh-state test-rules) m-state)))
+	(is (= (m/add-rules m/fresh-state :flow-1 test-rules) m-state)))
 
 (deftest test-remove-rules
-	(is (= (m/remove-rules (m/add-rules m/fresh-state test-rules)
+	(is (= (m/remove-rules (m/add-rules m/fresh-state :flow-1 test-rules)
 												 :flow-1)
 				 m/fresh-state)))
 

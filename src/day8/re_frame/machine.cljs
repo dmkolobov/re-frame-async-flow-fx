@@ -12,13 +12,13 @@
 	(FlowState. {} {} {} {} #{}))
 
 (defn add-rules
-	[{:keys [matcher seen-events rules flows] :as flow-state} new-rules]
+	[{:keys [matcher seen-events rules flows] :as flow-state} flow-id new-rules]
 	(assoc flow-state
 		:rules        (persistent!
 										(reduce #(assoc! %1 (:id %2) %2) (transient rules) new-rules))
 		:matcher      (matcher/add-rules matcher new-rules)
 		:seen-events  (event-cache/add-rules seen-events new-rules)
-		:flows        (reduce #(update %1 (keyword (namespace %2)) conj %2) flows (map :id new-rules))))
+		:flows        (assoc flows flow-id (map :id new-rules))))
 
 (defn remove-rules
 	[{:keys [matcher seen-events rules flows] :as flow-state} flow-id]
