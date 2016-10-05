@@ -25,12 +25,12 @@
 
 (defn- event-dissoc-path
 	[matcher event-v]
-	(let [[removable] (->> (count event-v)
-												 (range)
-												 (map #(subvec event-v 0 (inc %1)))
-												 (reverse)
-												 (partition-by #(removable-path? matcher %)))]
-		(last removable)))
+	(loop [path    nil
+				 event-v event-v]
+		(if (and (seq event-v)
+						 (removable-path? matcher event-v))
+			(recur event-v (pop event-v))
+			path)))
 
 (defn- remove-event
 	[matcher event-v]

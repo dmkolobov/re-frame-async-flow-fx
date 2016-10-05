@@ -1,13 +1,9 @@
-(ns day8.re-frame.rule
+(ns day8.re-frame.flow
 	(:require [re-frame.core :as re-frame]
 						[day8.re-frame.event-cache :as event-cache]))
 
-(defrecord Rule
-	[id
-	 when
-	 events
-	 dispatch-n
-	 halt?])
+
+(defrecord Rule [id when events dispatch-n halt?])
 
 (def map-when->fn {:seen?        event-cache/seen-all-of?
 									 :seen-both?   event-cache/seen-all-of?
@@ -20,7 +16,7 @@
 		when-fn
 		(re-frame/console :error  "async-flow: got bad value for :when - " when-kw)))
 
-(defn create-dispatch
+(defn normalize-dispatch
 	[dispatch dispatch-n rule]
 	(cond
 		dispatch-n (if dispatch
@@ -28,6 +24,15 @@
 								 dispatch-n)
 		dispatch   (list dispatch)
 		:else      '()))
+
+(defn normalize-events
+	[event events rule]
+	(cond
+		events (if event
+						 (re-frame/console :error "")
+						 (set events))
+		event  #{event}
+		:else  (re-frame/console :error "")))
 
 (defn spec->rule
 	[flow-id index {:keys [id when event events dispatch dispatch-n halt?] :as rule}]
@@ -38,8 +43,8 @@
 														(str "rule-" (inc index))))
 		 :halt?      (or halt? false)
 		 :when       (when->fn when)
-		 :events     (if event #{event} (set events))
-		 :dispatch-n (create-dispatch dispatch dispatch-n rule)}))
+		 :events     (normalize-events event events rule)
+		 :dispatch-n (normalize-dispatch dispatch dispatch-n rule)}))
 
 (defn causality-seq->rules
 	[causality-seq]
@@ -54,9 +59,17 @@
 													:dispatch effect}))
 			rules)))
 
-(defn rule-effects
+(defn fire-rule
 	"Given a rule, return the events that should be dispatched when the rule is fired."
 	[{:keys [id halt? dispatch-n]}]
 	(if-let [halt-event (when halt? [:async-flow/halt (keyword (namespace id))])]
 		(conj dispatch-n halt-event)
 		dispatch-n))
+
+(defn compile
+	"Given a machine specification, return a sequence of normalized rules
+	which can be added to an existing machine."
+	[{:keys [id rules]}]
+	(->> rules
+			 (mapcat #(if (map? %) [%] (causality-seq->rules %)))
+			 (map-indexed #(spec->rule id %1 %2))))

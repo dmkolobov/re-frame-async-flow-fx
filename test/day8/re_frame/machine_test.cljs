@@ -4,10 +4,10 @@
 						[cljs.pprint :refer [pprint]]
 						[clojure.data :refer [diff]]
 						[day8.re-frame.event-cache :as cache]
-						[day8.re-frame.rule :as rule]))
+						[day8.re-frame.flow :as flow]))
 
 (def rule-1
-	(rule/map->Rule
+	(flow/map->Rule
 		{:id         :flow-1/rule-1
 		 :when       cache/seen-all-of?
 		 :events     #{[:success [:foo]]}
@@ -15,7 +15,7 @@
 		 :halt?      false}))
 
 (def rule-2
-	(rule/map->Rule
+	(flow/map->Rule
 		{:id         :flow-1/rule-2
 		 :when       cache/seen-all-of?
 		 :events     #{[:success [:bar]]}
@@ -23,7 +23,7 @@
 		 :halt?      true}))
 
 (def rule-3
-	(rule/map->Rule
+	(flow/map->Rule
 		{:id         :flow-1/rule-3
 		 :when       cache/seen-some-of?
 		 :events     #{[:error [:foo]] [:error [:bar]]}
@@ -31,52 +31,6 @@
 		 :halt?      true}))
 
 (def test-rules [rule-1 rule-2 rule-3])
-
-(deftest test-compile
-	(is (= (m/compile {:id :flow-1
-								 	   :rules [{:id       :rule-1
-															:when     :seen?
-															:event    [:success [:foo]]
-															:dispatch [:bar]}
-
-											 	  	 {:id       :rule-2
-															:when     :seen?
-															:event    [:success [:bar]]
-															:dispatch [:success [:foobar]]
-															:halt?    true}
-
-													   {:id       :rule-3
-															:when     :seen-any-of?
-															:events   [[:error [:foo]]
-																			   [:error [:bar]]]
-															:dispatch [:error [:foobar]]
-															:halt?    true}]})
-				 test-rules))
-
-	(is (= (m/compile {:id :flow-1
-										 :rules [[[[:success :foo] [:bar]]
-															[[:success :bar] [:car]]
-															[[:success :car] [:success :foo :bar :car]]]
-														 {:when     :seen-any-of?
-															:events   [[:error :foo]
-																				 [:error :bar]
-																				 [:error :car]]
-															:dispatch [:error :foo :bar :car]
-															:halt?    true}]})
-				 [(rule/map->Rule
-						{:id :flow-1/rule-1 :when cache/seen-all-of? :events #{[:success :foo]} :dispatch-n [[:bar]] :halt? false})
-					(rule/map->Rule
-						{:id :flow-1/rule-2 :when cache/seen-all-of? :events #{[:success :bar]} :dispatch-n [[:car]] :halt? false})
-					(rule/map->Rule
-						{:id :flow-1/rule-3 :when cache/seen-all-of? :events #{[:success :car]} :dispatch-n [[:success :foo :bar :car]] :halt? false})
-					(rule/map->Rule
-						{:id         :flow-1/rule-4
-						 :when       cache/seen-some-of?
-						 :events     #{[:error :foo]
-													 [:error :bar]
-													 [:error :car]}
-						 :dispatch-n [[:error :foo :bar :car]]
-						 :halt?      true})])))
 
 (def m-state
 	(m/map->FlowState
@@ -98,11 +52,11 @@
 		 :fired-rules #{}}))
 
 (deftest test-add-flow
-	(is (= (m/add-rules m/fresh-state :flow-1 test-rules) m-state)))
+	(is (= (m/install m/fresh-state {:id :flow-1 :rules test-rules}) m-state)))
 
 (deftest test-remove-rules
-	(is (= (m/remove-rules (m/add-rules m/fresh-state :flow-1 test-rules)
-												 :flow-1)
+	(is (= (m/uninstall (m/install m/fresh-state {:id :flow-1 :rules test-rules})
+										  :flow-1)
 				 m/fresh-state)))
 
 (defn play
@@ -144,8 +98,3 @@
 													 :flow-1/rule-3 (disj (:events rule-3) [:error [:bar]])}
 						:fired-rules #{:flow-1/rule-3})
 					(list [:error [:foobar]] [:async-flow/halt :flow-1])])))
-
-	;(deftest test-rule-actions
-	;(is (= (m/rule-actions rule-1) (:dispatch-n rule-1)))
-	;(is (= (m/rule-actions rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
-	;(is (= (m/rule-actions rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))

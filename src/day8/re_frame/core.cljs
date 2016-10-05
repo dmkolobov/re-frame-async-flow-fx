@@ -10,27 +10,32 @@
 
 (def flow-path [:async-flow/state])
 
+(defn get-state
+	[{:keys [db] :as coeffects}]
+	(assoc coeffects :flow-state (get-in db flow-path)))
+
+(defn set-state
+	[{:keys [flow-state] :as effects}]
+	(-> effects
+			(update :db assoc-in flow-path flow-state)
+			(dissoc :flow-state)))
+
 (def flow-interceptor
 	(re-frame/->interceptor
 		{:before (fn [context]
-							 (update context
-											 :coeffects
-											 (fn [{:keys [db] :as coeffects}]
-												 (assoc coeffects :flow-state (get-in db flow-path)))))
+							 (update context :coeffects get-state))
+
 		 :after  (fn [context]
-							 (update context
-											 :effects
-											 (fn [{:keys [flow-state] :as effects}]
-												 (-> effects
-														 (update :db assoc-in flow-path flow-state)
-														 (dissoc :flow-state)))))}))
+							 (update context :effects set-state))}))
+
+;; event handlers
 
 (re-frame/reg-event-fx
 	:async-flow/initialize
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [{:keys [id first-dispatch rules] :as flow}]]
 		(let [new-rules (machine/compile flow)]
-			{:flow-state     (machine/add-rules flow-state new-rules)
+			{:flow-state     (machine/add-rules flow-state id new-rules)
 			 :dispatch       first-dispatch
 			 :forward-events {:id          id
 												:events      (into #{} forwarded-events new-rules)
@@ -48,6 +53,8 @@
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [flow-id]]
 		(machine/remove-rules flow-state flow-id)))
+
+;; fx handler
 
 (re-frame/reg-fx
 	:async-flow

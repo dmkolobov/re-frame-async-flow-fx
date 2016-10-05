@@ -1,20 +1,16 @@
-(ns day8.re-frame.event-cache
-	(:require [clojure.set :refer [difference]]))
+(ns day8.re-frame.event-cache)
 
 (defn add-rules
 	[event-cache rules]
 	(persistent!
-		(reduce (fn [t-cache {:keys [id events]}]
-							(assoc! t-cache id events))
+		(reduce (fn [t-cache {:keys [id events]}] (assoc! t-cache id events))
 						(transient event-cache)
 						rules)))
 
 (defn remove-rules
 	[event-cache rule-ids]
 	(persistent!
-		(reduce dissoc!
-						(transient event-cache)
-						rule-ids)))
+		(reduce dissoc! (transient event-cache) rule-ids)))
 
 (defn matches?
 	[event-v event-pattern]
@@ -33,6 +29,6 @@
 
 (defn seen-some-of?
 	[event-cache {:keys [id events] :as rule}]
-	(some? (seq (difference events (get event-cache id)))))
+	(not= events (get event-cache id)))
 
 

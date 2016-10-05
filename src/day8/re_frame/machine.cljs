@@ -3,7 +3,7 @@
 		[re-frame.core :as re-frame :refer [trim-v]]
 		[day8.re-frame.event-cache :as event-cache]
 		[day8.re-frame.matcher :as matcher]
-		[day8.re-frame.rule :as rule]))
+		[day8.re-frame.flow :as flow]))
 
 (defrecord FlowState
 	[flows rules matcher seen-events fired-rules])
@@ -11,32 +11,26 @@
 (def fresh-state
 	(FlowState. {} {} {} {} #{}))
 
-(defn add-rules
-	[{:keys [matcher seen-events rules flows] :as flow-state} flow-id new-rules]
-	(assoc flow-state
-		:rules        (persistent!
-										(reduce #(assoc! %1 (:id %2) %2) (transient rules) new-rules))
-		:matcher      (matcher/add-rules matcher new-rules)
-		:seen-events  (event-cache/add-rules seen-events new-rules)
-		:flows        (assoc flows flow-id (map :id new-rules))))
+(defn install
+	[{:keys [matcher seen-events rules flows] :as flow-state} flow]
+	(let [new-rules (:rules flow)]
+		(assoc flow-state
+			:rules        (persistent!
+											(reduce #(assoc! %1 (:id %2) %2) (transient rules) new-rules))
+			:matcher      (matcher/add-rules matcher new-rules)
+			:seen-events  (event-cache/add-rules seen-events new-rules)
+			:flows        (assoc flows (:id flow) (map :id new-rules)))))
 
-(defn remove-rules
+(defn uninstall
 	[{:keys [matcher seen-events rules flows] :as flow-state} flow-id]
 	(let [rule-ids   (get flows flow-id)
 				flow-rules (map #(get rules %) rule-ids)]
 		(assoc flow-state
-			:rules       (persistent! (reduce dissoc! (transient rules) rule-ids))
+			:rules       (persistent!
+										 (reduce dissoc! (transient rules) rule-ids))
 			:matcher     (matcher/remove-rules matcher flow-rules)
 			:seen-events (event-cache/remove-rules seen-events rule-ids)
 			:flows       (dissoc flows flow-id))))
-
-(defn compile
-	"Given a machine specification, return a sequence of normalized rules
-	which can be added to an existing machine."
-	[{:keys [id rules]}]
-	(->> rules
-			 (mapcat #(if (map? %) [%] (rule/causality-seq->rules %)))
-			 (map-indexed #(rule/spec->rule id %1 %2))))
 
 (defn transition
 	"Given a machine state and an event vector, return a tuple [machine-state dispatches],
@@ -49,4 +43,4 @@
 		[(assoc flow-state
 			 :seen-events seen-events
 			 :fired-rules (into fired-rules (map :id ready-rules)))
-		 (mapcat rule/rule-effects ready-rules)]))
+		 (mapcat flow/fire-rule ready-rules)]))
