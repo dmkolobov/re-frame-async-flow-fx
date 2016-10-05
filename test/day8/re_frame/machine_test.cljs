@@ -54,22 +54,29 @@
 				 test-rules))
 
 	(is (= (m/compile {:id :flow-1
-										 :rules [;;when [:success [:foo]] dispatch [:bar]
-										         [[[:success [:foo]] [:bar]]]
-
-														 {:id         :rule-2
-															:when       :seen?
-															:event      [:success [:bar]]
-															:dispatch-n [[:success [:foobar]]]
-															:halt?      true}
-
-														 {:id       :rule-3
-															:when     :seen-any-of?
-															:events   [[:error [:foo]]
-																				 [:error [:bar]]]
-															:dispatch [:error [:foobar]]
+										 :rules [[[[:success :foo] [:bar]]
+															[[:success :bar] [:car]]
+															[[:success :car] [:success :foo :bar :car]]]
+														 {:when     :seen-any-of?
+															:events   [[:error :foo]
+																				 [:error :bar]
+																				 [:error :car]]
+															:dispatch [:error :foo :bar :car]
 															:halt?    true}]})
-				 test-rules)))
+				 [(rule/map->Rule
+						{:id :flow-1/rule-1 :when cache/seen-all-of? :events #{[:success :foo]} :dispatch-n [[:bar]] :halt? false})
+					(rule/map->Rule
+						{:id :flow-1/rule-2 :when cache/seen-all-of? :events #{[:success :bar]} :dispatch-n [[:car]] :halt? false})
+					(rule/map->Rule
+						{:id :flow-1/rule-3 :when cache/seen-all-of? :events #{[:success :car]} :dispatch-n [[:success :foo :bar :car]] :halt? false})
+					(rule/map->Rule
+						{:id         :flow-1/rule-4
+						 :when       cache/seen-some-of?
+						 :events     #{[:error :foo]
+													 [:error :bar]
+													 [:error :car]}
+						 :dispatch-n [[:error :foo :bar :car]]
+						 :halt?      true})])))
 
 (def m-state
 	(m/map->FlowState
