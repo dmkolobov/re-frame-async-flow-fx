@@ -30,7 +30,8 @@
 
 	IAmRule
 
-	(ready? [this] (when-fn this))
+	(ready? [this]
+		(when-fn this))
 
 	(fire [_]
 		(if halt?
@@ -65,7 +66,7 @@
 		dispatch-n (if dispatch
 								 (re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
 								 dispatch-n)
-		dispatch   (list dispatch)
+		dispatch   [dispatch]
 		:else      '()))
 
 (defn normalize-events
