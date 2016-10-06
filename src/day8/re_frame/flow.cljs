@@ -1,60 +1,65 @@
 (ns day8.re-frame.flow
 	(:require [re-frame.core :as re-frame]
-						[day8.re-frame.event-cache :as event-cache]))
+						[day8.re-frame.rule :as rule]
+						[day8.re-frame.matcher :as matcher]
+						[clojure.set :as set]))
 
 
-(defrecord Rule [id when events dispatch-n halt?])
+(defrecord FlowState
+	[flows rules matcher fired-rules])
 
-(def map-when->fn {:seen?        event-cache/seen-all-of?
-									 :seen-both?   event-cache/seen-all-of?
-									 :seen-all-of? event-cache/seen-all-of?
-									 :seen-any-of? event-cache/seen-some-of?})
+(def fresh-state
+	(FlowState. {} {} {} #{}))
 
-(defn when->fn
-	[when-kw]
-	(if-let [when-fn (map-when->fn when-kw)]
-		when-fn
-		(re-frame/console :error  "async-flow: got bad value for :when - " when-kw)))
+(defn- add-rules
+	[rules new-rules]
+	(persistent!
+		(reduce (fn [rules {:keys [id] :as rule}]
+							(assoc! rules id rule))
+						(transient rules)
+						new-rules)))
 
-(defn normalize-dispatch
-	[dispatch dispatch-n rule]
-	(cond
-		dispatch-n (if dispatch
-								 (re-frame/console :error "async-flow: rule can only specify one of :dispatch and :dispatch-n. Got both: " rule)
-								 dispatch-n)
-		dispatch   (list dispatch)
-		:else      '()))
+(defn- remove-rules
+	[rules removed-rules]
+	(persistent!
+		(reduce (fn [rules {:keys [id]}]
+							(dissoc! rules id))
+						(transient rules)
+						removed-rules)))
 
-(defn normalize-events
-	[event events rule]
-	(cond
-		events (if event
-						 (re-frame/console :error "")
-						 (set events))
-		event  #{event}
-		:else  (re-frame/console :error "")))
+(defn install
+	"Incorporate the rules of the given flow into the machine state."
+	[{:keys [matcher rules flows] :as flow-state} {:keys [id] :as flow}]
+	(let [new-rules (->> (:rules flow)
+											 (flatten)
+											 (map-indexed #(rule/compile (:id flow) %1 %2)))]
+		(assoc flow-state
+			:rules    (add-rules rules new-rules)
+			:matcher  (matcher/add-rules matcher new-rules)
+			:flows    (assoc flows (:id flow) new-rules))))
 
-(defn spec->rule
-	[flow-id index {:keys [id when event events dispatch dispatch-n halt?] :as rule}]
-	(map->Rule
-		{:id         (keyword (name flow-id)
-													(if id
-														(name id)
-														(str "rule-" (inc index))))
-		 :halt?      (or halt? false)
-		 :when       (when->fn when)
-		 :events     (normalize-events event events rule)
-		 :dispatch-n (normalize-dispatch dispatch dispatch-n rule)}))
+(defn uninstall
+	"Remove all traces of the given flow from the machine state."
+	[{:keys [fired-rules matcher rules flows] :as flow-state} flow-id]
+	(let [flow-rules (get flows flow-id)]
+		(assoc flow-state
+			:rules       (remove-rules rules flow-rules)
+			:matcher     (matcher/remove-rules matcher flow-rules)
+			:flows       (dissoc flows flow-id)
+			:fired-rules (set/difference fired-rules
+																	 (into #{} (map :id flow-rules))))))
 
-(defn fire-rule
-	"Given a rule, return the events that should be dispatched when the rule is fired."
-	[{:keys [id halt? dispatch-n]}]
-	(if-let [halt-event (when halt? [:async-flow/halt (keyword (namespace id))])]
-		(conj dispatch-n halt-event)
-		dispatch-n))
-
-(defn compile
-	"Given a machine specification, return a sequence of normalized rules
-	which can be added to an existing machine."
-	[{:keys [id rules]}]
-	(->> rules (flatten) (map-indexed #(spec->rule id %1 %2))))
+(defn transition
+	"Given a machine state and an event vector, return a tuple [machine-state dispatches],
+	where machine-state is the state of the machine after seeing the event, and dispatches
+	are the events that should be dispatched after seeing the event."
+	[{:keys [matcher fired-rules rules] :as flow-state} event-v]
+	(let [changed-rules (->> (set/difference (matcher/matching-rules matcher event-v)
+																					 fired-rules)
+													 (map #(get rules %))
+													 (map #(rule/record % event-v)))
+				ready-rules   (filter rule/ready? changed-rules)]
+		[(-> flow-state
+				 (update :rules add-rules changed-rules)
+				 (update :fired-rules into (map :id ready-rules)))
+		 (mapcat rule/fire ready-rules)]))

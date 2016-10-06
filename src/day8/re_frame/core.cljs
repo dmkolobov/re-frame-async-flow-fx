@@ -2,7 +2,7 @@
 	(:require
 		[re-frame.core :as re-frame]
 
-		[day8.re-frame.machine :as machine]))
+		[day8.re-frame.flow :as machine]))
 
 (def forwarded-events
 	(comp (mapcat :events)
@@ -35,7 +35,7 @@
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [{:keys [id first-dispatch rules] :as flow}]]
 		(let [new-rules (machine/compile flow)]
-			{:flow-state     (machine/add-rules flow-state id new-rules)
+			{:flow-state     (machine/install flow-state flow)
 			 :dispatch       first-dispatch
 			 :forward-events {:id          id
 												:events      (into #{} forwarded-events new-rules)

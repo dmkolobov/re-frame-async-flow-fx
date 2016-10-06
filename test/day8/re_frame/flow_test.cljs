@@ -1,56 +1,109 @@
 (ns day8.re-frame.async-flow-fx.flow-test
 	(:require [cljs.test :refer-macros [is deftest]]
-						[day8.re-frame.flow :as flow]
-						[day8.re-frame.event-cache :as cache]))
+						[day8.re-frame.rule :as rule]
+						[day8.re-frame.flow :as flow]))
+
 
 (def rule-1
-	(flow/map->Rule
-		{:id         :flow-1/rule-1
-		 :when       cache/seen-all-of?
-		 :events     #{[:success [:foo]]}
-		 :dispatch-n [[:bar]]
-		 :halt?      false}))
+		{:id          :rule-1
+		 :when        :seen?
+		 :events      #{[:success [:foo]]}
+		 :dispatch-n  [[:bar]]
+		 :halt?       false})
+
+(def c-rule-1 (rule/compile :flow-1 0 rule-1))
 
 (def rule-2
-	(flow/map->Rule
-		{:id         :flow-1/rule-2
-		 :when       cache/seen-all-of?
-		 :events     #{[:success [:bar]]}
-		 :dispatch-n [[:success [:foobar]]]
-		 :halt?      true}))
+		{:id          :rule-2
+		 :when        :seen?
+		 :events      #{[:success [:bar]]}
+		 :dispatch-n  [[:success [:foobar]]]
+		 :halt?       true})
+
+(def c-rule-2 (rule/compile :flow-1 0 rule-2))
 
 (def rule-3
-	(flow/map->Rule
-		{:id         :flow-1/rule-3
-		 :when       cache/seen-some-of?
-		 :events     #{[:error [:foo]] [:error [:bar]]}
-		 :dispatch-n [[:error [:foobar]]]
-		 :halt?      true}))
+		{:id          :rule-3
+		 :when        :seen-any-of?
+		 :events      #{[:error [:foo]] [:error [:bar]]}
+		 :dispatch-n  [[:error [:foobar]]]
+		 :halt?       true})
 
-(def test-rules [rule-1 rule-2 rule-3])
+(def c-rule-3 (rule/compile :flow-1 0 rule-3))
 
-(deftest test-rule-effects
-	(is (= (flow/fire-rule rule-1) (:dispatch-n rule-1)))
-	(is (= (flow/fire-rule rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
-	(is (= (flow/fire-rule rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))
+(def m-state
+	(flow/map->FlowState
+		{:rules       {:flow-1/rule-1 c-rule-1
+									 :flow-1/rule-2 c-rule-2
+									 :flow-1/rule-3 c-rule-3}
 
-(deftest test-compile
-				 (is (= (flow/compile {:id :flow-1
-															 :rules [{:id       :rule-1
-																			  :when     :seen?
-																			  :event    [:success [:foo]]
-																			  :dispatch [:bar]}
+		 :flows       {:flow-1 [c-rule-1 c-rule-2 c-rule-3]}
 
-																			 {:id       :rule-2
-																			  :when     :seen?
-																			  :event    [:success [:bar]]
-																			  :dispatch [:success [:foobar]]
-																			  :halt?    true}
+		 :matcher     {:success {[:foo] #{:flow-1/rule-1}
+														 [:bar] #{:flow-1/rule-2}}
+									 :error   {[:foo] #{:flow-1/rule-3}
+														 [:bar] #{:flow-1/rule-3}}}
 
-																			 {:id       :rule-3
-																			  :when     :seen-any-of?
-																			  :events   [[:error [:foo]]
-																									 [:error [:bar]]]
-																			  :dispatch [:error [:foobar]]
-																			  :halt?    true}]})
-								test-rules)))
+		 :fired-rules #{}}))
+
+(deftest test-add-flow
+	(is (= (flow/install flow/fresh-state {:id :flow-1 :rules [rule-1 rule-2 rule-3]}) m-state)))
+
+(deftest test-remove-rules
+	(is (= (flow/uninstall (flow/install flow/fresh-state {:id :flow-1 :rules [rule-1 rule-2 rule-3]})
+											   :flow-1)
+				 flow/fresh-state)))
+
+(defn play
+	[machine-state & events]
+	(reduce (fn [[state dispatches] event-v]
+						(flow/transition state event-v))
+					[machine-state nil]
+					events))
+
+(deftest test-record-events
+	(is (= (play m-state [:success [:foo]])
+				 [(-> m-state
+							(update :rules
+											assoc
+											:flow-1/rule-1 (update c-rule-1 :seen-events conj [:success [:foo]]))
+							(update :fired-rules conj :flow-1/rule-1))
+					(list [:bar])]))
+
+	(is (= (play (-> m-state
+									 (update :rules
+													 assoc
+													 :flow-1/rule-1 (update c-rule-1 :seen-events conj [:success [:foo]]))
+									 (update :fired-rules conj :flow-1/rule-1))
+							 [:success [:foo]])
+				 [(-> m-state
+							(update :rules
+											assoc
+											:flow-1/rule-1 (update c-rule-1 :seen-events conj [:success [:foo]]))
+							(update :fired-rules conj :flow-1/rule-1))
+					[]]))
+
+	(is (= (play m-state [:success [:foo]] [:success [:bar]])
+				 [(-> m-state
+							(update :rules
+											assoc
+											:flow-1/rule-1 (update c-rule-1 :seen-events conj [:success [:foo]])
+											:flow-1/rule-2 (update c-rule-2 :seen-events conj [:success [:bar]]))
+							(update :fired-rules conj :flow-1/rule-1 :flow-1/rule-2))
+					(list [:success [:foobar]] [:async-flow/halt :flow-1])]))
+
+	(is (= (play m-state [:error [:foo]])
+				 [(-> m-state
+							(update :rules
+											assoc
+											:flow-1/rule-3 (update c-rule-3 :seen-events conj [:error [:foo]]))
+							(update :fired-rules conj :flow-1/rule-3))
+					(list [:error [:foobar]] [:async-flow/halt :flow-1])]))
+
+	(is (= (play m-state [:error [:bar]])
+				 [(-> m-state
+							(update :rules
+											assoc
+											:flow-1/rule-3 (update c-rule-3 :seen-events conj [:error [:bar]]))
+							(update :fired-rules conj :flow-1/rule-3))
+					(list [:error [:foobar]] [:async-flow/halt :flow-1])])))
