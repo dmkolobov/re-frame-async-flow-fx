@@ -56,9 +56,10 @@
 								test-rules))
 
 				 (is (= (flow/compile {:id :flow-1
-															 :rules [[[[:success :foo] [:bar]]
-																				[[:success :bar] [:car]]
-																				[[:success :car] [:success :foo :bar :car]]]
+															 :rules [(flow/chain
+																				 [:success :foo] [:bar]
+																				 [:success :bar] [:car]
+																				 [:success :car] [:success :foo :bar :car])
 																			 {:when     :seen-any-of?
 																				:events   [[:error :foo]
 																									 [:error :bar]

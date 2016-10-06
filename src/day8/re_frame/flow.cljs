@@ -46,18 +46,13 @@
 		 :events     (normalize-events event events rule)
 		 :dispatch-n (normalize-dispatch dispatch dispatch-n rule)}))
 
-(defn causality-seq->rules
-	[causality-seq]
-	(loop [[cause effect] (first causality-seq)
-				 clauses        (rest causality-seq)
-				 rules          []]
-		(if cause
-			(recur (first clauses)
-						 (rest clauses)
-						 (conj rules {:when     :seen?
-													:event    cause
-													:dispatch effect}))
-			rules)))
+(defn clause->rule-spec
+	[[cause effect]]
+	{:when :seen? :event cause :dispatch effect})
+
+(defn chain
+	[& clauses]
+	(->> clauses (partition 2) (map clause->rule-spec)))
 
 (defn fire-rule
 	"Given a rule, return the events that should be dispatched when the rule is fired."
@@ -70,6 +65,4 @@
 	"Given a machine specification, return a sequence of normalized rules
 	which can be added to an existing machine."
 	[{:keys [id rules]}]
-	(->> rules
-			 (mapcat #(if (map? %) [%] (causality-seq->rules %)))
-			 (map-indexed #(spec->rule id %1 %2))))
+	(->> rules (flatten) (map-indexed #(spec->rule id %1 %2))))
