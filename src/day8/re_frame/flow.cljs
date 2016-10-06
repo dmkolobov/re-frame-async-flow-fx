@@ -46,14 +46,6 @@
 		 :events     (normalize-events event events rule)
 		 :dispatch-n (normalize-dispatch dispatch dispatch-n rule)}))
 
-(defn clause->rule-spec
-	[[cause effect]]
-	{:when :seen? :event cause :dispatch effect})
-
-(defn chain
-	[& clauses]
-	(->> clauses (partition 2) (map clause->rule-spec)))
-
 (defn fire-rule
 	"Given a rule, return the events that should be dispatched when the rule is fired."
 	[{:keys [id halt? dispatch-n]}]

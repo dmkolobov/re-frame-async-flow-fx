@@ -53,30 +53,4 @@
 																									 [:error [:bar]]]
 																			  :dispatch [:error [:foobar]]
 																			  :halt?    true}]})
-								test-rules))
-
-				 (is (= (flow/compile {:id :flow-1
-															 :rules [(flow/chain
-																				 [:success :foo] [:bar]
-																				 [:success :bar] [:car]
-																				 [:success :car] [:success :foo :bar :car])
-																			 {:when     :seen-any-of?
-																				:events   [[:error :foo]
-																									 [:error :bar]
-																									 [:error :car]]
-																				:dispatch [:error :foo :bar :car]
-																				:halt?    true}]})
-								[(flow/map->Rule
-									 {:id :flow-1/rule-1 :when cache/seen-all-of? :events #{[:success :foo]} :dispatch-n [[:bar]] :halt? false})
-								 (flow/map->Rule
-									 {:id :flow-1/rule-2 :when cache/seen-all-of? :events #{[:success :bar]} :dispatch-n [[:car]] :halt? false})
-								 (flow/map->Rule
-									 {:id :flow-1/rule-3 :when cache/seen-all-of? :events #{[:success :car]} :dispatch-n [[:success :foo :bar :car]] :halt? false})
-								 (flow/map->Rule
-									 {:id         :flow-1/rule-4
-										:when       cache/seen-some-of?
-										:events     #{[:error :foo]
-																	[:error :bar]
-																	[:error :car]}
-										:dispatch-n [[:error :foo :bar :car]]
-										:halt?      true})])))
+								test-rules)))
