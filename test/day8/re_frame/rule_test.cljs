@@ -9,7 +9,8 @@
 		 :events      #{[:success [:foo]]}
 		 :dispatch-n  [[:bar]]
 		 :halt?       false
-		 :seen-events #{}}))
+		 :capture?    false
+		 :seen-events []}))
 
 (def rule-2
 	(rule/map->Rule
@@ -18,7 +19,8 @@
 		 :events      #{[:success [:bar]]}
 		 :dispatch-n  [[:success [:foobar]]]
 		 :halt?       true
-		 :seen-events #{}}))
+		 :capture?    true
+		 :seen-events []}))
 
 (def rule-3
 	(rule/map->Rule
@@ -27,13 +29,16 @@
 		 :events     #{[:error [:foo]] [:error [:bar]]}
 		 :dispatch-n [[:error [:foobar]]]
 		 :halt?      true
-		 :seen-events #{}}))
+		 :capture?   false
+		 :seen-events []}));;
 
 (def test-rules [rule-1 rule-2 rule-3])
 
 (deftest test-rule-effects
 				 (is (= (rule/fire rule-1) (:dispatch-n rule-1)))
-				 (is (= (rule/fire rule-2) (conj (:dispatch-n rule-2) [:async-flow/halt :flow-1])))
+				 (is (= (rule/fire (assoc rule-2 :seen-events [[:success [:bar] :data]]))
+								[[:success [:foobar] [:success [:bar] :data]]
+								 [:async-flow/halt :flow-1]]))
 				 (is (= (rule/fire rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))
 
 (deftest test-compile
@@ -46,7 +51,8 @@
 																		:when     :seen?
 																		:event    [:success [:bar]]
 																		:dispatch [:success [:foobar]]
-																		:halt?    true})
+																		:halt?    true
+																		:capture? true})
 				 rule-2))
 	(is (= (rule/compile :flow-1 nil {:id       :rule-3
 																		:when     :seen-any-of?

@@ -50,9 +50,9 @@
 																	 (into #{} (map :id flow-rules))))))
 
 (defn transition
-	"Given a machine state and an event vector, return a tuple [machine-state dispatches],
-	where machine-state is the state of the machine after seeing the event, and dispatches
-	are the events that should be dispatched after seeing the event."
+	"Given a machine state and an event vector, return a tuple of the machine
+	state after seeing the event, and the seq of events to dispatch resulting
+	from the rules fired."
 	[{:keys [matcher fired-rules rules] :as flow-state} event-v]
 	(let [changed-rules (->> (set/difference (matcher/matching-rules matcher event-v)
 																					 fired-rules)

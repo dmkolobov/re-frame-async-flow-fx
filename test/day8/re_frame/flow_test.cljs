@@ -20,7 +20,7 @@
 		 :dispatch-n  [[:success [:foobar]]]
 		 :halt?       true})
 
-(def c-rule-2 (rule/compile :flow-1 0 rule-2))
+(def c-rule-2 (rule/compile :flow-1 1 rule-2))
 
 (def rule-3
 		{:id          :rule-3
@@ -29,7 +29,7 @@
 		 :dispatch-n  [[:error [:foobar]]]
 		 :halt?       true})
 
-(def c-rule-3 (rule/compile :flow-1 0 rule-3))
+(def c-rule-3 (rule/compile :flow-1 2 rule-3))
 
 (def m-state
 	(flow/map->FlowState
@@ -62,6 +62,7 @@
 					events))
 
 (deftest test-record-events
+	;; ensure that the first rule is fired when its event is fired.
 	(is (= (play m-state [:success [:foo]])
 				 [(-> m-state
 							(update :rules
@@ -70,6 +71,7 @@
 							(update :fired-rules conj :flow-1/rule-1))
 					(list [:bar])]))
 
+	;; ensure that rules are not fired twice.
 	(is (= (play (-> m-state
 									 (update :rules
 													 assoc

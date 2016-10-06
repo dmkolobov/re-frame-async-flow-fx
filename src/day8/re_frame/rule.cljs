@@ -26,7 +26,7 @@
 ;; ---- rule definition ----
 
 (defrecord Rule
-	[id when-fn events dispatch-n halt? seen-events]
+	[id when-fn events dispatch-n halt? capture? seen-events]
 
 	IAmRule
 
@@ -34,7 +34,12 @@
 
 	(fire [_]
 		(if halt?
-			(conj dispatch-n [:async-flow/halt (keyword (namespace id))])
+			(conj (if capture?
+							(mapv (fn [event-v]
+										(into event-v seen-events))
+									dispatch-n)
+							dispatch-n)
+						[:async-flow/halt (keyword (namespace id))])
 			dispatch-n))
 
 	(record [this event-v]
@@ -73,15 +78,15 @@
 		:else  (re-frame/console :error "")))
 
 (defn compile
-	"Given a flow id and a rule spec from that flow, return a compiled rule."
-	[flow-id index {:keys [id when event events dispatch dispatch-n halt?] :as rule}]
+	[flow-id index {:keys [id when event events dispatch dispatch-n halt? capture?] :as rule}]
 	(map->Rule
 		{:id          (keyword (name flow-id)
 													 (if id
 														 (name id)
 														 (str "rule-" (inc index))))
 		 :halt?       (or halt? false)
+		 :capture?    (or capture? false)
 		 :when-fn     (when->fn when)
 		 :events      (normalize-events event events rule)
 		 :dispatch-n  (normalize-dispatch dispatch dispatch-n rule)
-		 :seen-events #{}}))
+		 :seen-events []}))
