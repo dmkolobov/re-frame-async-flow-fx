@@ -2,7 +2,7 @@
 	(:require
 		[re-frame.core :as re-frame]
 
-		[day8.re-frame.flow :as machine]))
+		[day8.re-frame.flow :as flow]))
 
 (def forwarded-events
 	(comp (mapcat :events)
@@ -31,28 +31,27 @@
 ;; event handlers
 
 (re-frame/reg-event-fx
-	:async-flow/initialize
+	:async-flow/init
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [{:keys [id first-dispatch rules] :as flow}]]
-		(let [new-rules (machine/compile flow)]
-			{:flow-state     (machine/install flow-state flow)
+			{:flow-state     (flow/install flow-state flow)
 			 :dispatch       first-dispatch
 			 :forward-events {:id          id
-												:events      (into #{} forwarded-events new-rules)
-												:dispatch-to :async-flow/step}})))
+												:events      (into #{} forwarded-events (get-in flow-state [:flows id]))
+												:dispatch-to [:async-flow/transition]}}))
 
 (re-frame/reg-event-fx
-	:async-flow/step
+	:async-flow/transition
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [event-v]]
-		(let [[flow-state dispatches] (machine/transition flow-state event-v)]
+		(let [[flow-state dispatches] (flow/transition flow-state event-v)]
 			{:dispatch-n dispatches :flow-state flow-state})))
 
 (re-frame/reg-event-fx
 	:async-flow/halt
 	[flow-interceptor re-frame/trim-v]
 	(fn [{:keys [flow-state]} [flow-id]]
-		(machine/remove-rules flow-state flow-id)))
+		(flow/uninstall flow-state flow-id)))
 
 ;; fx handler
 
