@@ -5,10 +5,10 @@
 						[clojure.set :as set]))
 
 (defrecord MachineState
-	[flow-path flows rules matcher fired-rules])
+	[flows rules matcher fired-rules])
 
 (def fresh-state
-	(MachineState. [] {} {} {} #{}))
+	(MachineState. {} {} {} #{}))
 
 (defn- add-rules
 	[rules new-rules]
@@ -32,11 +32,11 @@
 
 (defn install
 	"Incorporate the rules of the given flow into the machine state."
-	[{:keys [matcher rules flows flow-path] :as time-machine} {:keys [id] :as flow}]
+	[{:keys [matcher rules flows] :as time-machine} {:keys [id] :as flow}]
 	(let [new-rules (->> (:rules flow)
 											 (flatten)
 											 (map-indexed (fn [idx spec]
-																			(rule/compile flow-path (:id flow) idx spec))))]
+																			(rule/compile (:id flow) idx spec))))]
 		[(assoc time-machine
 			:rules    (add-rules rules new-rules)
 			:matcher  (matcher/add-rules matcher new-rules)
