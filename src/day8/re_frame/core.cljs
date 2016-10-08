@@ -13,7 +13,7 @@
 
 (defn fx-handler
 	"Given a flow, dispatch an event to install the flow into the time machine.
-	State will be stored in the db-path of the flow, or in the path [:async-flow/state]"
+	State will be stored in the db-path of the flow, or in the path [:async-flow/state]."
 	[{:keys [db-path id]
 		:or   {db-path [:async-flow/state]
 					 id      (unique-flow-id)}
@@ -65,28 +65,41 @@
 	(let [[time-machine' deps] (flow/install time-machine flow)
 				dispatches           (normalize-dispatches first-dispatch first-dispatches flow)]
 		{:time-machine   time-machine'
+		                 ;; kick off processing by dispatching first events.
 		 :dispatch-n     dispatches
+		                 ;; start forwarding the flow's event dependencies.
 		 :forward-events {:id          id
 											:events      deps
 											:dispatch-to [:async-flow/transition (:flow-path time-machine)]}}))
 
 (re-frame/reg-event-fx :async-flow/init intercept init)
 
+(defn qualify-halts
+	[db-path dispatches]
+	(map (fn [[event-id flow-id :as dispatch]]
+				 (if (= :async-flow/halt event-id)
+					 [:async-flow/halt db-path flow-id]
+					 dispatch))
+			 dispatches))
+
 (defn transition
+	"Transition the machine state at db-path and dispatch all events returned by
+	the transition."
 	[{:keys [time-machine]} [db-path event-v]]
-		(let [[time-machine' dispatches] (flow/transition time-machine event-v)
-					halt-xform                (map (fn [[event-id flow-id :as dispatch]]
-																					 (if (= :async-flow/halt event-id)
-																						 [:async-flow/halt db-path flow-id]
-																						 dispatch)))]
-			{:dispatch-n   (into [] halt-xform dispatches)
+		(let [[time-machine' dispatches] (flow/transition time-machine event-v)]
+			               ;; add db-path to any :async-flow/halt events.
+			{:dispatch-n   (qualify-halts db-path dispatches)
 			 :time-machine time-machine'}))
 
 (re-frame/reg-event-fx :async-flow/transition intercept transition)
 
 (defn halt
+	"Uninstall the flow-id flow from the machine state at db-path, and unregister
+	any forwarded events associated with that flow."
 	[{:keys [time-machine]} [db-path flow-id]]
+	                 ;; remove rules and matcher entries from machine state
 	{:time-machine   (flow/uninstall time-machine flow-id)
+	                 ;; stop forwarding the flow's event dependencies
 	 :forward-events {:unregister flow-id}})
 
 (re-frame/reg-event-fx :async-flow/halt intercept halt)
