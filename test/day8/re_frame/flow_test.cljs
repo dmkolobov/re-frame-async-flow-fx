@@ -4,7 +4,8 @@
 						[day8.re-frame.flow :as flow]))
 
 (def flow-1
-	{:id :flow-1
+	{:id      :flow-1
+	 :db-path [:path]
 	 :rules [{:id          :rule-1
 					  :when        :seen?
 					  :events      #{[:success :foo]}
@@ -24,8 +25,10 @@
 						:halt?       true}]})
 
 (defn play
-	[flow & events]
-	(loop [state  (flow/install flow/fresh-state flow)
+	[path flow & events]
+	(loop [state  (first
+									(flow/install (assoc flow/fresh-state :flow-path path)
+																flow))
 				 fired  []
 				 events events]
 		(if (seq events)
@@ -36,39 +39,44 @@
 							 events'))
 			fired)))
 
+(deftest test-deps
+	(is (= (second
+					 (flow/install flow/fresh-state flow-1))
+				 #{:success :error :hello})))
+
 (deftest test-transition
-	(is (= (play flow-1 [:success :foo])
+	(is (= (play [:path] flow-1 [:success :foo])
 				 [[:success :foo]
 					[:bar]]))
 
-	(is (= (play flow-1 [:success :foo] [:success :foo] [:success :foo])
+	(is (= (play [:path] flow-1 [:success :foo] [:success :foo] [:success :foo])
 				 [[:success :foo]
 					[:bar]
 					[:success :foo]
 					[:success :foo]]))
 
-	(is (= (play flow-1 [:success :foo] [:hello :world] [:success :bar :data])
+	(is (= (play [:path] flow-1 [:success :foo] [:hello :world] [:success :bar :data])
 				 [[:success :foo]
 					[:bar]
 					[:hello :world]
 					[:success :bar :data]
 					[:success :foobar [:hello :world] [:success :bar :data]]
 					[:other-success [:hello :world] [:success :bar :data]]
-					[:async-flow/halt :flow-1]]))
+					[:async-flow/halt [:path] :flow-1]]))
 
-	(is (= (play flow-1 [:error :foo])
+	(is (= (play [:path] flow-1 [:error :foo])
 				 [[:error :foo]
 					[:error :foobar]
-					[:async-flow/halt :flow-1]]))
+					[:async-flow/halt [:path] :flow-1]]))
 
-	(is (= (play flow-1 [:success :foo] [:error :bar])
+	(is (= (play [:path] flow-1 [:success :foo] [:error :bar])
 				 [[:success :foo]
 					[:bar]
 					[:error :bar]
 					[:error :foobar]
-					[:async-flow/halt :flow-1]])))
+					[:async-flow/halt [:path] :flow-1]])))
 
 (deftest test-uninstall
-	(is (= (flow/uninstall (flow/install flow/fresh-state flow-1)
+	(is (= (flow/uninstall (first (flow/install flow/fresh-state flow-1))
 												 :flow-1)
 				 flow/fresh-state)))

@@ -5,6 +5,7 @@
 (def rule-1
 	(rule/map->Rule
 		{:id          :flow-1/rule-1
+		 :flow-path   [:path]
 		 :when-fn     rule/seen-all?
 		 :events      #{[:success [:foo]]}
 		 :dispatch-n  [[:bar]]
@@ -15,6 +16,7 @@
 (def rule-2
 	(rule/map->Rule
 		{:id          :flow-1/rule-2
+		 :flow-path   [:path]
 		 :when-fn     rule/seen-all?
 		 :events      #{[:success [:bar]]}
 		 :dispatch-n  [[:success [:foobar]]]
@@ -25,6 +27,7 @@
 (def rule-3
 	(rule/map->Rule
 		{:id         :flow-1/rule-3
+		 :flow-path  [:path]
 		 :when-fn    rule/seen-any?
 		 :events     #{[:error [:foo]] [:error [:bar]]}
 		 :dispatch-n [[:error [:foobar]]]
@@ -38,26 +41,26 @@
 				 (is (= (rule/fire rule-1) (:dispatch-n rule-1)))
 				 (is (= (rule/fire (assoc rule-2 :seen-events [[:success [:bar] :data]]))
 								[[:success [:foobar] [:success [:bar] :data]]
-								 [:async-flow/halt :flow-1]]))
-				 (is (= (rule/fire rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))
+								 [:async-flow/halt [:path] :flow-1]]))
+				 (is (= (rule/fire rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt [:path] :flow-1]))))
 
 (deftest test-compile
-	(is (= (rule/compile :flow-1 nil {:id       :rule-1
-																		:when     :seen?
-																		:event    [:success [:foo]]
-																		:dispatch [:bar]})
+	(is (= (rule/compile [:path] :flow-1 nil {:id       :rule-1
+																						:when     :seen?
+																						:event    [:success [:foo]]
+																						:dispatch [:bar]})
 				 rule-1))
-	(is (= (rule/compile :flow-1 nil {:id       :rule-2
-																		:when     :seen?
-																		:event    [:success [:bar]]
-																		:dispatch [:success [:foobar]]
-																		:halt?    true
-																		:capture? true})
+	(is (= (rule/compile [:path] :flow-1 nil {:id       :rule-2
+																						:when     :seen?
+																						:event    [:success [:bar]]
+																						:dispatch [:success [:foobar]]
+																						:halt?    true
+																						:capture? true})
 				 rule-2))
-	(is (= (rule/compile :flow-1 nil {:id       :rule-3
-																		:when     :seen-any-of?
-																		:events   [[:error [:foo]]
-																							 [:error [:bar]]]
-																		:dispatch [:error [:foobar]]
-																		:halt?    true})
+	(is (= (rule/compile [:path] :flow-1 nil {:id       :rule-3
+																						:when     :seen-any-of?
+																						:events   [[:error [:foo]]
+																											 [:error [:bar]]]
+																						:dispatch [:error [:foobar]]
+																						:halt?    true})
 				rule-3)))

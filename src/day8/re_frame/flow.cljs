@@ -6,10 +6,10 @@
 
 
 (defrecord FlowState
-	[flows rules matcher fired-rules])
+	[flow-path flows rules matcher fired-rules])
 
 (def fresh-state
-	(FlowState. {} {} {} #{}))
+	(FlowState. [] {} {} {} #{}))
 
 (defn- add-rules
 	[rules new-rules]
@@ -27,16 +27,22 @@
 						(transient rules)
 						removed-rules)))
 
+(def dep-xform
+	(comp (mapcat :events)
+				(map first)))
+
 (defn install
 	"Incorporate the rules of the given flow into the machine state."
-	[{:keys [matcher rules flows] :as flow-state} {:keys [id] :as flow}]
+	[{:keys [matcher rules flows flow-path] :as flow-state} {:keys [id] :as flow}]
 	(let [new-rules (->> (:rules flow)
 											 (flatten)
-											 (map-indexed #(rule/compile (:id flow) %1 %2)))]
-		(assoc flow-state
+											 (map-indexed (fn [idx spec]
+																			(rule/compile flow-path (:id flow) idx spec))))]
+		[(assoc flow-state
 			:rules    (add-rules rules new-rules)
 			:matcher  (matcher/add-rules matcher new-rules)
-			:flows    (assoc flows (:id flow) new-rules))))
+			:flows    (assoc flows (:id flow) new-rules))
+		 (into #{} dep-xform new-rules)]))
 
 (defn uninstall
 	"Remove all traces of the given flow from the machine state."
