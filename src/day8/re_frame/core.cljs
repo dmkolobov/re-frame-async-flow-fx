@@ -4,7 +4,30 @@
 
 		[day8.re-frame.flow :as flow]))
 
+;; -------- state ---------
+
+(defn unique-flow-id
+	"Generate a unique flow id."
+	[]
+	(let [s (gensym)] (keyword (str "flow-" s))))
+
+(defn fx-handler
+	"Given a flow, dispatch an event to install the flow into the time machine.
+	State will be stored in the db-path of the flow, or in the path [:async-flow/state]"
+	[{:keys [db-path id]
+		:or   {db-path [:async-flow/state]
+					 id      (unique-flow-id)}
+		:as   flow}]
+	(re-frame/dispatch [:async-flow/init db-path flow]))
+
+(re-frame/reg-fx :async-flow fx-handler)
+
+;; -------- state ---------
+
 (defn get-state
+	"All time machine events have the db-path of the machine as their first non-id element.
+	Given a coeffects map, adds a key :time-machine to the coeffects with the machine state
+	stored at the event's db-path as the value."
 	[{:keys [db event] :as coeffects}]
 	(let [[path & _] event]
 		(assoc coeffects
@@ -13,70 +36,57 @@
 											flow/fresh-state))))
 
 (defn set-state
-	[{:keys [time-machine] :as effects} path]
+	"Given an effects map containing a :time-machine key and a db-path, stores the
+	value of the :time-machine key in the db under db-path"
+	[{:keys [time-machine] :as effects} db-path]
 	(-> effects
-			(update :db assoc-in path time-machine)
+			(update :db assoc-in db-path time-machine)
 			(dissoc :time-machine)))
 
 (def flow-interceptor
 	(re-frame/->interceptor
-		{:before (fn [context]
+		{:before (fn get-state-ctx [context]
 							 (update context :coeffects get-state))
 
-		 :after  (fn [context]
+		 :after  (fn set-state-ctx [context]
 							 (let [path (first (get-in context [:coeffects :event]))]
 								 (update context :effects set-state path)))}))
 
 (def intercept [re-frame/trim-v flow-interceptor])
 
-;; event handlers
-;;
+;; -------- event handlers ---------
+
 (defn normalize-dispatches
 	[first-dispatch first-dispatches flow]
 	(if first-dispatch [first-dispatch] first-dispatches))
 
-(defn init-flow
-	[{:keys [time-machine]} [path {:keys [id first-dispatch first-dispatches] :as flow}]]
+(defn init
+	[{:keys [time-machine]} [db-path {:keys [id first-dispatch first-dispatches] :as flow}]]
 	(let [[time-machine' deps] (flow/install time-machine flow)
-				dispatches         (normalize-dispatches first-dispatch first-dispatches flow)]
-		{:time-machine     time-machine'
+				dispatches           (normalize-dispatches first-dispatch first-dispatches flow)]
+		{:time-machine   time-machine'
 		 :dispatch-n     dispatches
 		 :forward-events {:id          id
 											:events      deps
 											:dispatch-to [:async-flow/transition (:flow-path time-machine)]}}))
 
-(re-frame/reg-event-fx :async-flow/init intercept init-flow)
+(re-frame/reg-event-fx :async-flow/init intercept init)
 
-(defn transition-flow
-	[{:keys [time-machine]} [path event-v]]
-		(let [[time-machine dispatches] (flow/transition time-machine event-v)
-					halt-xform                (map (fn [[id & _ :as dispatch]]
-																					 (if (= :async-flow/halt id)
-																						 [:async-flow/halt path id]
+(defn transition
+	[{:keys [time-machine]} [db-path event-v]]
+		(let [[time-machine' dispatches] (flow/transition time-machine event-v)
+					halt-xform                (map (fn [[event-id flow-id :as dispatch]]
+																					 (if (= :async-flow/halt event-id)
+																						 [:async-flow/halt db-path flow-id]
 																						 dispatch)))]
 			{:dispatch-n   (into [] halt-xform dispatches)
-			 :time-machine time-machine}))
+			 :time-machine time-machine'}))
 
-(re-frame/reg-event-fx :async-flow/transition intercept transition-flow)
+(re-frame/reg-event-fx :async-flow/transition intercept transition)
 
-(defn halt-flow
-	[{:keys [time-machine]} [path flow-id]]
+(defn halt
+	[{:keys [time-machine]} [db-path flow-id]]
 	{:time-machine   (flow/uninstall time-machine flow-id)
 	 :forward-events {:unregister flow-id}})
 
-(re-frame/reg-event-fx :async-flow/halt intercept halt-flow)
-
-;; fx handler
-
-(defn unique-flow-id
-	[]
-	(let [s (gensym)] (keyword (str "flow-" s))))
-
-(defn fx-handler
-	[{:keys [db-path id]
-		:or   {db-path [:async-flow/state]
-					 id      (unique-flow-id)}
-		:as   flow}]
-	(re-frame/dispatch [:async-flow/init db-path flow]))
-
-(re-frame/reg-fx :async-flow fx-handler)
+(re-frame/reg-event-fx :async-flow/halt intercept halt)
