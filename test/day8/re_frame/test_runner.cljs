@@ -20,10 +20,3 @@
 		'day8.re-frame.async-flow-fx.matcher-test
 		'day8.re-frame.async-flow-fx.rule-test
 		'day8.re-frame.async-flow-fx.flow-test))
-
-;; ---- KARMA  -----------------------------------------------------------------
-
-(defn ^:export run-karma [karma]
-  (karma/run-tests
-    karma
-    'day8.re-frame.async-flow-fx.async-flow-fx-test))

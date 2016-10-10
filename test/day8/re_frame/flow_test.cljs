@@ -54,6 +54,11 @@
 					[:success :foo]
 					[:success :foo]]))
 
+	(is (= (play flow-1 [:success :foo] [:hello])
+				 [[:success :foo]
+					[:bar]
+					[:hello]]))
+
 	(is (= (play flow-1 [:success :foo] [:hello :world] [:success :bar :data])
 				 [[:success :foo]
 					[:bar]

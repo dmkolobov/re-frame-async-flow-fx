@@ -13,10 +13,18 @@
 
 ;; ---- when predicates ----
 
+(defn matches?
+	[pattern event-v]
+	(= (subvec event-v 0 (count pattern))
+		 pattern))
+
 (defn seen-all?
 	"Returns true if the rule has seen all of its required events."
 	[{:keys [events seen-events]}]
-	(= (count events) (count seen-events)))
+	(empty? (reduce (fn [patterns event]
+									  (remove #(matches? % event) patterns))
+								  events
+								  seen-events)))
 
 (defn seen-any?
 	"Returns true if the rule has seen any of its required events."
@@ -34,14 +42,19 @@
 		(when-fn this))
 
 	(fire [_]
-		(if halt?
-			(conj (if capture?
-							(mapv (fn [event-v]
-										(into event-v seen-events))
-									dispatch-n)
+		(cond-> (if capture?
+							(mapv #(into % seen-events) dispatch-n)
 							dispatch-n)
-						[:async-flow/halt (keyword (namespace id))])
-			dispatch-n))
+						halt? (conj [:async-flow/halt (keyword (namespace id))])))
+
+	;	(if halt?
+	;		(conj (if capture?
+	;						(mapv (fn [event-v]
+	;									(into event-v seen-events))
+	;								dispatch-n)
+	;						dispatch-n)
+	;					[:async-flow/halt (keyword (namespace id))])
+	;		dispatch-n))
 
 	(record [this event-v]
 		(assoc this :seen-events (conj seen-events event-v))))

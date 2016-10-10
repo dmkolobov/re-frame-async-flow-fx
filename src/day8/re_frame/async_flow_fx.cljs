@@ -1,7 +1,7 @@
 (ns day8.re-frame.async-flow-fx
 	(:require
 		[re-frame.core :as re-frame]
-
+		[day8.re-frame.forward-events-fx]
 		[day8.re-frame.flow :as flow]))
 
 ;; -------- state ---------
@@ -18,7 +18,7 @@
 		:or   {db-path [:async-flow/state]
 					 id      (unique-flow-id)}
 		:as   flow}]
-	(re-frame/dispatch [:async-flow/init db-path flow]))
+	(re-frame/dispatch [:async-flow/init db-path (assoc flow :id id)]))
 
 (re-frame/reg-fx :async-flow fx-handler)
 
@@ -45,12 +45,13 @@
 
 (def flow-interceptor
 	(re-frame/->interceptor
-		{:before (fn get-state-ctx [context]
-							 (update context :coeffects get-state))
+		:id     :flow-interceptor
+		:before (fn get-state-ctx [context]
+							(update context :coeffects get-state))
 
-		 :after  (fn set-state-ctx [context]
-							 (let [path (first (get-in context [:coeffects :event]))]
-								 (update context :effects set-state path)))}))
+		:after  (fn set-state-ctx [context]
+							(let [path (first (get-in context [:coeffects :event]))]
+								(update context :effects set-state path)))))
 
 (def intercept [re-frame/trim-v flow-interceptor])
 
@@ -61,16 +62,17 @@
 	(if first-dispatch [first-dispatch] first-dispatches))
 
 (defn init
-	[{:keys [time-machine]} [db-path {:keys [id first-dispatch first-dispatches] :as flow}]]
+	[{:keys [db time-machine]} [db-path {:keys [id first-dispatch first-dispatches] :as flow}]]
 	(let [[time-machine' deps] (flow/install time-machine flow)
 				dispatches           (normalize-dispatches first-dispatch first-dispatches flow)]
-		{:time-machine   time-machine'
+		{:db             db
+		 :time-machine   time-machine'
 		 ;; kick off processing by dispatching first events.
 		 :dispatch-n     dispatches
 		 ;; start forwarding the flow's event dependencies.
-		 :forward-events {:id          id
+		 :forward-events {:register    id
 											:events      deps
-											:dispatch-to [:async-flow/transition (:flow-path time-machine)]}}))
+											:dispatch-to [:async-flow/transition db-path]}}))
 
 (re-frame/reg-event-fx :async-flow/init intercept init)
 
@@ -85,10 +87,11 @@
 (defn transition
 	"Transition the machine state at db-path and dispatch all events returned by
 	the transition."
-	[{:keys [time-machine]} [db-path event-v]]
+	[{:keys [db time-machine]} [db-path event-v]]
 	(let [[time-machine' dispatches] (flow/transition time-machine event-v)]
 		;; add db-path to any :async-flow/halt events.
-		{:dispatch-n   (qualify-halts db-path dispatches)
+		{:db           db
+		 :dispatch-n   (qualify-halts db-path dispatches)
 		 :time-machine time-machine'}))
 
 (re-frame/reg-event-fx :async-flow/transition intercept transition)
@@ -96,9 +99,10 @@
 (defn halt
 	"Uninstall the flow-id flow from the machine state at db-path, and unregister
 	any forwarded events associated with that flow."
-	[{:keys [time-machine]} [db-path flow-id]]
+	[{:keys [db time-machine]} [db-path flow-id]]
 	;; remove rules and matcher entries from machine state
-	{:time-machine   (flow/uninstall time-machine flow-id)
+	{:db             db
+	 :time-machine   (flow/uninstall time-machine flow-id)
 	 ;; stop forwarding the flow's event dependencies
 	 :forward-events {:unregister flow-id}})
 
