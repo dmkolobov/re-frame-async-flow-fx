@@ -1,5 +1,6 @@
 (ns day8.re-frame.matcher
-	(:require [re-frame.core :refer [reg-event-fx trim-v]]))
+	(:require [re-frame.core :refer [reg-event-fx trim-v]]
+						[cljs.pprint :refer [pprint]]))
 
 (defn add-rule
 	"Given a matcher and a flow rule, return a new matcher which
@@ -25,7 +26,7 @@
 
 (defn- event-dissoc-path
 	[matcher event-v]
-	(loop [path    nil
+	(loop [path    []
 				 event-v event-v]
 		(if (and (seq event-v)
 						 (removable-path? matcher event-v))
@@ -44,10 +45,11 @@
 	all of the events mentioned in the rule."
 	[matcher {:keys [id events] :as rule}]
 	(reduce (fn [matcher event-v]
-						(let [rule-set (get-in matcher event-v)]
+						(if-let [rule-set (get-in matcher event-v)]
 							(if (> 1 (count rule-set))
 								(assoc-in matcher event-v (disj rule-set id))
-								(remove-event matcher event-v))))
+								(remove-event matcher event-v))
+							matcher))
 					matcher
 					events))
 

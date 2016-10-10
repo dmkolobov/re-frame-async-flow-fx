@@ -39,3 +39,6 @@
 																				:other #{:rule-2}}}
 																 [:foo :bar :car 42])
 				 #{:rule-1})))
+
+;; todo implement example with a single event referenced
+;; by multiple rules.

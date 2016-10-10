@@ -15,8 +15,9 @@
 
 (defn matches?
 	[pattern event-v]
-	(= (subvec event-v 0 (count pattern))
-		 pattern))
+	(and (<= (count pattern) (count event-v))
+			 (= (subvec event-v 0 (count pattern))
+		       pattern)))
 
 (defn seen-all?
 	"Returns true if the rule has seen all of its required events."
