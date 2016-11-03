@@ -16,7 +16,7 @@
 						:events      #{[:success :bar] [:hello]}
 						:dispatch-n  [[:success :foobar] [:other-success]]
 						:halt?       true
-						:capture?    true}
+						:trace?      true}
 
 					 {:id          :rule-3
 						:when        :seen-any-of?

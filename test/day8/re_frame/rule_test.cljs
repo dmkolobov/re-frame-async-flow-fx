@@ -9,7 +9,7 @@
 		 :events      #{[:success [:foo]]}
 		 :dispatch-n  [[:bar]]
 		 :halt?       false
-		 :capture?    false
+		 :trace?      false
 		 :seen-events []}))
 
 (def rule-2
@@ -19,7 +19,7 @@
 		 :events      #{[:success [:bar]]}
 		 :dispatch-n  [[:success [:foobar]]]
 		 :halt?       true
-		 :capture?    true
+		 :trace?      true
 		 :seen-events []}))
 
 (def rule-3
@@ -29,7 +29,7 @@
 		 :events     #{[:error [:foo]] [:error [:bar]]}
 		 :dispatch-n [[:error [:foobar]]]
 		 :halt?      true
-		 :capture?   false
+		 :trace?     false
 		 :seen-events []}));;
 
 (def test-rules [rule-1 rule-2 rule-3])
@@ -52,7 +52,7 @@
 																						:event    [:success [:bar]]
 																						:dispatch [:success [:foobar]]
 																						:halt?    true
-																						:capture? true})
+																						:trace? true})
 				 rule-2))
 	(is (= (rule/compile :flow-1 nil {:id       :rule-3
 																						:when     :seen-any-of?
