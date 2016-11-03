@@ -48,15 +48,6 @@
 							dispatch-n)
 						halt? (conj [:async-flow/halt (keyword (namespace id))])))
 
-	;	(if halt?
-	;		(conj (if capture?
-	;						(mapv (fn [event-v]
-	;									(into event-v seen-events))
-	;								dispatch-n)
-	;						dispatch-n)
-	;					[:async-flow/halt (keyword (namespace id))])
-	;		dispatch-n))
-
 	(record [this event-v]
 		(assoc this :seen-events (conj seen-events event-v))))
 
