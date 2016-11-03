@@ -35,10 +35,14 @@
 
 (defn- remove-event
 	[matcher event-v]
-	(let [path (event-dissoc-path matcher event-v)]
-		(if (= 1 (count path))
-			(dissoc matcher (first path))
-			(update-in matcher (butlast path) dissoc (last path)))))
+	(let [path       (event-dissoc-path matcher event-v)
+				path-count (count path)]
+		(if (= 1 path-count)
+			(dissoc matcher (get path 0))
+			(update-in matcher
+								 (subvec path 0 (dec path-count))
+								 dissoc
+								 (get path (dec path-count))))))
 
 (defn remove-rule
 	"Given a matcher and a flow rule, return a new matcher without
