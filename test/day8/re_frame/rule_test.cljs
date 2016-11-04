@@ -10,6 +10,7 @@
 		 :dispatch-n  [[:bar]]
 		 :halt?       false
 		 :trace?      false
+		 :capture     nil
 		 :seen-events []}))
 
 (def rule-2
@@ -19,6 +20,7 @@
 		 :events      #{[:success [:bar]]}
 		 :dispatch-n  [[:success [:foobar]]]
 		 :halt?       true
+		 :capture     nil
 		 :trace?      true
 		 :seen-events []}))
 
@@ -29,6 +31,7 @@
 		 :events     #{[:error [:foo]] [:error [:bar]]}
 		 :dispatch-n [[:error [:foobar]]]
 		 :halt?      true
+		 :capture    nil
 		 :trace?     false
 		 :seen-events []}));;
 
@@ -36,7 +39,7 @@
 
 (deftest test-rule-effects
 				 (is (= (rule/fire rule-1) (:dispatch-n rule-1)))
-				 (is (= (rule/fire (assoc rule-2 :seen-events [[:success [:bar] :data]]))
+				 (is (= (rule/fire (assoc rule-2 :seen-events [[[:success [:bar]] [:data]]]))
 								[[:success [:foobar] [:success [:bar] :data]]
 								 [:async-flow/halt :flow-1]]))
 				 (is (= (rule/fire rule-3) (conj (:dispatch-n rule-3) [:async-flow/halt :flow-1]))))

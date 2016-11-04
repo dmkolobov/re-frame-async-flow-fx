@@ -26,17 +26,17 @@
 
 (defn play
 	[flow & events]
-	(loop [state  (first
-									(flow/install flow/fresh-state flow))
-				 fired  []
-				 events events]
+	(let [[initial-state deps] (flow/install flow/fresh-state flow)]
+		(loop [state initial-state
+				   fired        []
+				   events       events]
 		(if (seq events)
 			(let [[event & events'] events
 						[state' dispatches] (flow/transition state event)]
 				(recur state'
-							 (into (conj fired event) dispatches)
-							 events'))
-			fired)))
+							 (conj fired event)
+							 (concat dispatches events')))
+			fired))))
 
 (deftest test-deps
 	(is (= (second
@@ -84,3 +84,40 @@
 	(is (= (flow/uninstall (first (flow/install flow/fresh-state flow-1))
 												 :flow-1)
 				 flow/fresh-state)))
+
+(def flow-capture
+	{:id    :flow
+	 :rules [{:id       :rule-1
+						:when     :seen?
+						:events   [[:foo] [:bar]]
+						:capture  {:db/id 42}
+						:dispatch [:foobar]}
+
+					 {:id       :rule-2
+						:when     :seen?
+						:events   [[:foobar] [:other]]
+						:capture  [{:photo/id 42
+												:attr     :value}]
+						:dispatch [:transact]}]})
+
+(deftest test-flow-capture
+	(is (= (play flow-capture [:foo [:hello "hello"]] [:bar [:world "world"]])
+				 [[:foo [:hello "hello"]]
+					[:bar [:world "world"]]
+					[:foobar {:db/id 42
+										:hello "hello"
+										:world "world"}]]))
+
+	(is (= (play flow-capture [:foo [:hello "hello"]] [:bar [:world "world"]] [:other :hello-world])
+				 [[:foo [:hello "hello"]]
+					[:bar [:world "world"]]
+					[:foobar {:db/id 42
+										:hello "hello"
+										:world "world"}]
+					[:other :hello-world]
+					[:transact [{:photo/id 42
+											 :attr     :value}
+											{:db/id 42
+											 :hello "hello"
+											 :world "world"}
+											:hello-world]]])))

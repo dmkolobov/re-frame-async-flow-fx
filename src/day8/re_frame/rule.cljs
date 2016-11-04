@@ -22,20 +22,19 @@
 (defn seen-all?
 	"Returns true if the rule has seen all of its required events."
 	[{:keys [events seen-events]}]
-	(empty? (reduce (fn [patterns event]
-									  (remove #(matches? % event) patterns))
-								  events
-								  seen-events)))
+	(= (set events)
+		 (set (map first seen-events))))
 
 (defn seen-any?
 	"Returns true if the rule has seen any of its required events."
 	[{:keys [events seen-events]}]
-	(> (count events) (- (count events) (count seen-events))))
+	(some?
+		(some (set (map first seen-events)) events)))
 
 ;; ---- rule definition ----
 
 (defrecord Rule
-	[id when-fn events dispatch-n halt? trace? seen-events]
+	[id when-fn events dispatch-n halt? capture trace? seen-events]
 
 	IAmRule
 
@@ -43,13 +42,23 @@
 		(when-fn this))
 
 	(fire [_]
-		(cond-> (if trace?
-							(mapv #(into % seen-events) dispatch-n)
-							dispatch-n)
+		(cond-> (cond trace?
+									(let [traces (map (fn [[pattern extra]] (into pattern extra))
+																		seen-events)]
+										(mapv #(into % traces) dispatch-n))
+
+									(some? capture)
+									(let [data (reduce into capture (map last seen-events))]
+										(mapv #(conj % data) dispatch-n))
+
+									:default dispatch-n)
 						halt? (conj [:async-flow/halt (keyword (namespace id))])))
 
 	(record [this event-v]
-		(assoc this :seen-events (conj seen-events event-v))))
+		(let [matching-pattern (first
+														 (filter #(matches? % event-v) events))]
+			(assoc this :seen-events (conj seen-events [matching-pattern
+																									(subvec event-v (count matching-pattern))])))))
 
 ;; ---- rule compilation ----
 
@@ -84,14 +93,15 @@
 		:else  (re-frame/console :error "async-flow: must specify one of :event or :events. Got none: " rule)))
 
 (defn compile
-	[flow-id index {:keys [id when event events dispatch dispatch-n halt? trace?] :as rule}]
+	[flow-id index {:keys [id when event events dispatch dispatch-n halt? trace? capture] :as rule}]
 	(map->Rule
 		{:id          (keyword (name flow-id)
 													 (if id
 														 (name id)
 														 (str "rule-" (inc index))))
 		 :halt?       (or halt? false)
-		 :trace?    (or trace? false)
+		 :capture     capture
+		 :trace?      (or trace? false)
 		 :when-fn     (when->fn when)
 		 :events      (normalize-events event events rule)
 		 :dispatch-n  (normalize-dispatch dispatch dispatch-n rule)
